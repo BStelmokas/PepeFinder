@@ -18,13 +18,11 @@ import { headers } from "next/headers"; // Used to build tRPC context in the ser
 import { createCaller } from "~/server/api/root"; // Typed server-side tRPC caller factory.
 import { createTRPCContext } from "~/server/api/trpc"; // Context builder that preserves middleware invariants.
 
-type ImagePageProps = {
-  params: {
-    id: string;
-  };
-};
-
-export default async function ImageDetailPage({ params }: ImagePageProps) {
+export default async function ImageDetailPage({
+  params,
+}: {
+  params: { id: string };
+}) {
   /**
    * Step 1: Parse the route param.
    *
