@@ -23,11 +23,18 @@ import { headers } from "next/headers"; // Provides request headers (we’ll use
 import { createCaller } from "~/server/api/root"; // Typed server-side tRPC caller factory.
 import { createTRPCContext } from "~/server/api/trpc"; // Context builder used by tRPC middleware (even in server calls).
 
-type SearchPageProps = {
-  searchParams: Record<string, string | string[] | undefined>;
-};
+export default async function SearchPage(props: unknown) {
+  /**
+   * IMPORTANT:
+   * In newer Next.js App Router versions, `searchParams` is typed as Promise<any>
+   * at the framework boundary.
+   *
+   * We accept an untyped boundary and narrow immediately.
+   */
+  const { searchParams } = props as {
+    searchParams: Record<string, string | string[] | undefined>;
+  };
 
-export default async function SearchPage({ searchParams }: SearchPageProps) {
   /**
    * Step 1: Read q from the URL.
    *
