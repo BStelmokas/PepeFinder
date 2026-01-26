@@ -18,11 +18,17 @@ import { headers } from "next/headers"; // Used to build tRPC context in the ser
 import { createCaller } from "~/server/api/root"; // Typed server-side tRPC caller factory.
 import { createTRPCContext } from "~/server/api/trpc"; // Context builder that preserves middleware invariants.
 
-export default async function ImageDetailPage({
-  params,
-}: {
-  params: { id: string };
-}) {
+export default async function ImageDetailPage(props: unknown) {
+  /**
+   * IMPORTANT:
+   * In newer Next.js App Router versions, `params` is typed as Promise<any>
+   * at the framework boundary.
+   *
+   * We intentionally accept an untyped boundary and narrow immediately.
+   * This is the correct, stable pattern for App Router pages.
+   */
+  const { params } = props as { params: { id: string } };
+
   /**
    * Step 1: Parse the route param.
    *
