@@ -11,6 +11,40 @@ This file is created **early by design** and updated whenever I cut corners or m
 
 ---
 
+## MVP0 Summary (Baseline Locked)
+
+**MVP0 is complete and deployed.**
+This section freezes what exists today, before uploads, workers, or AI costs are introduced.
+
+### What MVP0 includes
+
+- Deterministic, **DB-only image search** using tag overlap
+- Frozen query semantics (pure module, tested)
+- Three core tables: `images`, `tags`, `image_tags`
+- Ranking: `match_count DESC → created_at DESC → id DESC`
+- Server Components calling **server-side tRPC** (no HTTP)
+- Manually seeded dataset (≈50 images)
+- Infra-only `/api/healthz` endpoint
+- Deployed on **Vercel + managed Postgres**
+- Zero model calls, zero per-request variable cost
+
+### What MVP0 explicitly does NOT include
+
+- User uploads
+- Background workers
+- AI / vision models
+- Authentication
+- Pagination, caching, or CDN optimization
+- Admin tooling
+
+MVP0 proves the **core loop**:
+
+> normalized query → deterministic DB ranking → image detail
+
+Everything that follows (MVP1+) builds on this without changing search semantics.
+
+---
+
 ## 1. Things I Consciously Did _Worse_ to Ship Faster
 
 These are not mistakes — they are **intentional compromises** made to reduce scope, complexity, or time-to-market.
@@ -81,7 +115,7 @@ These are not mistakes — they are **intentional compromises** made to reduce s
 
 **Why I did it anyway**
 
-- MVP0 schema is small and unstable.
+- MVP0 schema is small and stable _by intent_.
 - Push is faster and safer during early iteration.
 - Reduces cognitive overhead while the domain is still fluid.
 
@@ -108,15 +142,15 @@ These decisions add upfront complexity but dramatically reduce long-term risk.
 **Why this is expensive up front**
 
 - Requires careful schema and index design.
-- Forces us to think in relational terms early.
-- Limits “cool AI tricks” during MVP.
+- Forces relational thinking early.
+- Delays “AI magic” gratification.
 
 **Why this is correct**
 
 - Search latency is predictable and cheap.
 - Zero per-request AI cost.
 - Behavior is testable, explainable, and debuggable.
-- Search continues working even if AI tagging is disabled.
+- Search keeps working even if AI tagging is disabled.
 
 **Long-term payoff**
 
@@ -130,28 +164,29 @@ These decisions add upfront complexity but dramatically reduce long-term risk.
 
 **What I did**
 
-- All paid vision/LLM calls:
-  - happen only in a background worker
-  - are gated by explicit caps and a kill switch
-- The request path never calls models.
+- All paid vision/LLM calls are **architecturally forbidden** on the request path.
+- They are planned to run only in a background worker with:
+  - explicit caps
+  - a kill switch
+  - fail-closed behavior
 
 **Why this is more work**
 
 - Requires async job modeling.
-- Forces explicit state handling (`pending / indexed / failed`).
+- Forces explicit state transitions (`pending / indexed / failed`).
 - Adds operational complexity early.
 
 **Why this is correct**
 
-- Cost safety by design, not by policy.
+- Cost safety by design, not policy.
 - A broken or expensive model cannot take down search.
 - System degrades gracefully under budget pressure.
 
 **Long-term payoff**
 
 - Makes spending auditable and enforceable.
-- Enables batch processing and back-pressure.
-- Aligns with real production AI systems.
+- Enables batching and back-pressure.
+- Matches how serious AI systems are actually built.
 
 ---
 
@@ -159,26 +194,26 @@ These decisions add upfront complexity but dramatically reduce long-term risk.
 
 **What I did**
 
-- All application logic lives in tRPC procedures.
-- Route handlers are infra-only (auth, health checks, webhooks).
-- Server Components call the tRPC server-side caller instead of raw DB access.
+- All application logic lives behind tRPC procedures.
+- Route handlers are infra-only (health checks, auth/webhooks later).
+- Server Components call the **server-side tRPC caller**, not the DB directly.
 
 **Why this is “slower” initially**
 
-- More boilerplate than calling the DB directly.
-- Requires discipline about where logic lives.
+- More ceremony than inline DB queries.
+- Requires discipline about boundaries.
 
 **Why this is correct**
 
 - One authoritative API surface.
-- Consistent validation, auth, and middleware.
+- Centralized validation and middleware.
 - Clear separation between infrastructure and domain logic.
 
 **Long-term payoff**
 
 - Easier refactors.
-- Easier testing of business logic.
-- Cleaner mental model for the system.
+- Easier testing.
+- Cleaner mental model as the system grows.
 
 ---
 
@@ -199,8 +234,8 @@ These are **known future pressure points**, not surprises.
 
 **Likely fixes**
 
-- Pre-computed search tables (materialized views).
-- Partial indexes on `image_tags` for `status = indexed`.
+- Pre-computed search tables or materialized views.
+- Partial indexes scoped to `status = indexed`.
 - Query planner tuning or denormalized counters.
 
 ---
@@ -209,12 +244,12 @@ These are **known future pressure points**, not surprises.
 
 **Current**
 
-- `storage_key` is abstract (URL or object key).
-- Delivery is out of scope for MVP0.
+- `storage_key` points directly to public assets.
+- No CDN abstraction yet.
 
 **At 10× scale**
 
-- Hot images need CDN caching.
+- Hot images need aggressive CDN caching.
 - Cold images should move to cheaper storage tiers.
 
 **Likely fixes**
@@ -236,7 +271,7 @@ These are **known future pressure points**, not surprises.
 
 - Tag explosion and near-duplicates.
 - Semantic drift across models or datasets.
-- Harder to reason about recall vs precision.
+- Harder recall/precision trade-offs.
 
 **Likely fixes**
 
