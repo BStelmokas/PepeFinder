@@ -119,4 +119,6 @@ Whole-system relationship diagram
 
 ```
 
+```
 Images and tags are global entities; meaning lives in the join table, and search is counting how many joins match a query.
+```
