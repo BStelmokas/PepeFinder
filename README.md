@@ -30,7 +30,7 @@ Follow our deployment guides for [Vercel](https://create.t3.gg/en/deployment/ver
 
 ---
 
-Database Table Structures:
+## Database Table Structures
 
 images table:
 
@@ -119,6 +119,92 @@ Whole-system relationship diagram
 
 ```
 
-```
 Images and tags are global entities; meaning lives in the join table, and search is counting how many joins match a query.
+
+---
+
+## PepeFinder Architecture (Mermaid diagram)
+
 ```
+flowchart TD
+    %% ===== UI Layer =====
+    subgraph UI["Presentation Layer (Next.js App Router)"]
+        A1["Home Page / Search Page / Image Page"]
+        A2["Upload Page (Client Component)"]
+    end
+
+    %% ===== API Layer =====
+    subgraph API["API Layer (tRPC Procedures)"]
+        B1["search.searchImages"]
+        B2["image.getById"]
+        B3["upload.createUploadPlan"]
+    end
+
+    %% ===== Domain Layer =====
+    subgraph DOMAIN["Domain / Business Logic (Pure Functions)"]
+        C1["tokenizeQuery()"]
+        C2["normalizeTagName()"]
+    end
+
+    %% ===== Data Access Layer =====
+    subgraph DATA["Data Access Layer (Drizzle ORM)"]
+        D1["PostgreSQL Queries"]
+    end
+
+    %% ===== Infra Layer =====
+    subgraph INFRA["Infrastructure Adapters"]
+        E1["S3 Storage Adapter"]
+    end
+
+    %% ===== Persistence =====
+    subgraph DB["Persistence"]
+        F1["PostgreSQL Database"]
+        F2["S3-Compatible Object Storage"]
+    end
+
+    %% ===== Async Workers =====
+    subgraph WORKER["Async Worker (Out of Request Path)"]
+        G1["Tagging Worker"]
+        G2["Vision / LLM APIs"]
+    end
+
+    %% ===== Flows =====
+    A1 -->|Reads| B1
+    A1 -->|Reads| B2
+    A2 -->|Upload metadata| B3
+
+    B1 --> C1
+    B2 --> D1
+    B3 --> D1
+
+    C1 --> D1
+
+    D1 --> F1
+
+    B3 --> E1
+    E1 --> F2
+
+    F1 -->|pending images| G1
+    G1 -->|model calls| G2
+    G1 -->|update status/tags| F1
+```
+
+### How to read this diagram (important)
+
+Top → Bottom = abstraction level
+
+Top: user-facing concerns (UI)
+
+Middle: rules, contracts, orchestration (API + domain)
+
+Bottom: durability and side effects (DB, storage, workers)
+
+No arrows go up from lower layers making decisions.
+
+### Architecture overview:
+
+PepeFinder is a layered system built around tRPC as the application boundary.
+UI components communicate exclusively with typed procedures, which orchestrate pure domain logic, database access, and infrastructure adapters.
+All expensive AI work runs asynchronously in workers, ensuring a DB-only, deterministic request path for search and browsing.
+
+---

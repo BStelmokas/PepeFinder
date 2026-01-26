@@ -16,6 +16,8 @@ import { createTRPCRouter, createCallerFactory } from "~/server/api/trpc"; // T3
 import { searchRouter } from "~/server/api/routers/search";
 import { imageRouter } from "~/server/api/routers/image";
 
+import { uploadRouter } from "~/server/api/routers/upload";
+
 /**
  * This is the primary router for your server.
  *
@@ -24,6 +26,8 @@ import { imageRouter } from "~/server/api/routers/image";
 export const appRouter = createTRPCRouter({
   search: searchRouter,
   image: imageRouter,
+
+  upload: uploadRouter,
 });
 
 // Export type definition of API (this is what gives `api.*` its types).

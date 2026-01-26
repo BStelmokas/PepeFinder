@@ -15,6 +15,7 @@ import { desc, eq } from "drizzle-orm"; // Typed SQL operators.
 import { TRPCError } from "@trpc/server"; // Canonical error type for tRPC (maps cleanly to HTTP in Next).
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc"; // T3 router/procedure primitives.
 import { imageTags, images, tags } from "~/server/db/schema"; // Table definitions (source of truth).
+import { createPresignedGetUrl, publicUrlForKey } from "~/server/storage/s3";
 
 export const imageRouter = createTRPCRouter({
   /**
@@ -75,6 +76,34 @@ export const imageRouter = createTRPCRouter({
       }
 
       /**
+       * renderUrl logic (minimal, practical):
+       * - If storageKey looks like a URL/path (starts with "http" or "/"), render directly.
+       * - If storageKey looks like an S3 object key (e.g. "images/<sha>.png"), then:
+       *   - use public base url if available
+       *   - else generate a short-lived signed GET URL
+       *
+       * This keeps MVP1 usable even if your bucket is private.
+       */
+      let renderUrl: string;
+
+      if (
+        image.storageKey.startsWith("http") ||
+        image.storageKey.startsWith("/")
+      ) {
+        renderUrl = image.storageKey;
+      } else {
+        // storageKey is treated as an object key.
+        const pub = publicUrlForKey(image.storageKey);
+
+        renderUrl =
+          pub ??
+          (await createPresignedGetUrl({
+            key: image.storageKey,
+            expiresInSeconds: 60 * 10, // 10 min is plenty for viewing an image page.
+          }));
+      }
+
+      /**
        * Step 2: fetch tags for this image ordered by confidence DESC.
        *
        * Why this query shape?
@@ -100,6 +129,12 @@ export const imageRouter = createTRPCRouter({
           tags.name,
         );
 
-      return { image, tags: tagRows };
+      return {
+        image: {
+          ...image,
+          renderUrl, // always renderable in <img src>
+        },
+        tags: tagRows,
+      };
     }),
 });
