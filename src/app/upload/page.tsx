@@ -37,7 +37,7 @@ export default function UploadPage() {
           </Link>
 
           <Link
-            href="/search/q=apustaja"
+            href="/search?q=apustaja"
             className="text-sm text-gray-700 hover:text-gray-900"
           >
             Browse
