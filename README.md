@@ -191,6 +191,7 @@ flowchart TD
 
 ### How to read this diagram (important)
 
+```
 Top → Bottom = abstraction level
 
 Top: user-facing concerns (UI)
@@ -200,6 +201,7 @@ Middle: rules, contracts, orchestration (API + domain)
 Bottom: durability and side effects (DB, storage, workers)
 
 No arrows go up from lower layers making decisions.
+```
 
 ### Architecture overview:
 
