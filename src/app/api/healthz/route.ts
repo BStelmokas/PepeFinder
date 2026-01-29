@@ -50,7 +50,7 @@ export async function GET() {
      * - response shape is stable forever
      */
     return NextResponse.json({ ok: true }, { status: 200 });
-  } catch (err) {
+  } catch {
     /**
      * Failure path:
      * - Any exception here means the instance is not healthy enough to serve traffic.

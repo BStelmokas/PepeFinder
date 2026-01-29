@@ -184,7 +184,7 @@ async function writeTagsForImage(args: {
           );
         }
 
-        tagId = existing[0]!.id;
+        tagId = existing[0].id;
       }
 
       // Insert join row (idempotent because image_tags has composite PK).
