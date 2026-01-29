@@ -48,6 +48,17 @@ export const env = createEnv({
      * If not set (private bucket), we will generate signed GET URLs for detail pages.
      */
     S3_PUBLIC_BASE_URL: z.string().url().optional(),
+
+    /**
+     * Worker controls (cost safety by design)
+     */
+
+    // Hard kill switch: if true, the worker will refuse to process jobs.
+    TAGGING_PAUSED: z.enum(["true", "false"]).optional().default("false"),
+
+    // Simple global cap: max completed jobs per UTC day.
+    // This is intentionally blunt for MVP1 to prevent runaway spending.
+    TAGGING_DAILY_CAP: z.coerce.number().int().min(0).default(200),
   },
 
   /**
@@ -74,6 +85,9 @@ export const env = createEnv({
     S3_SECRET_ACCESS_KEY: process.env.S3_SECRET_ACCESS_KEY,
     S3_BUCKET: process.env.S3_BUCKET,
     S3_PUBLIC_BASE_URL: process.env.S3_PUBLIC_BASE_URL,
+
+    TAGGING_PAUSED: process.env.TAGGING_PAUSED,
+    TAGGING_DAILY_CAP: process.env.TAGGING_DAILY_CAP,
   },
   /**
    * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially

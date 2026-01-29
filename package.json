@@ -20,7 +20,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "db:seed": "node --env-file=.env --import tsx scripts/seed.ts"
+    "db:seed": "node --env-file=.env --import tsx scripts/seed.ts",
+    "worker:tagger": "node --env-file=.env --import tsx src/worker/tagger.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.975.0",

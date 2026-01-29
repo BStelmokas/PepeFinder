@@ -26,7 +26,18 @@ import { eq } from "drizzle-orm";
 
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
 import { db } from "~/server/db";
-import { images } from "~/server/db/schema";
+
+/**
+ * tRPC router: upload (MVP1)
+ *
+ * Step 11 adds:
+ * - upload.enqueueTaggingJob: a server-only mutation that creates a tag_jobs row if missing.
+ *
+ * Important invariant:
+ * - enqueue mutation does NOT call any model.
+ * - Worker is the only place where paid model calls will ever happen.
+ */
+import { images, tagJobs } from "~/server/db/schema";
 import { createPresignedPutUrl, publicUrlForKey } from "~/server/storage/s3";
 
 /**
@@ -236,5 +247,62 @@ export const uploadRouter = createTRPCRouter({
         publicUrl, // null if bucket is private (fine).
         status: "pending" as const,
       };
+    }),
+
+  /**
+   * upload.enqueueTaggingJob (Step 11)
+   *
+   * Input: { imageId: number }
+   *
+   * Behavior:
+   * - Ensures a tag_jobs row exists (unique(image_id) ensures no duplicates).
+   * - Does NOT call any model.
+   *
+   * Why this is a separate mutation (instead of automatically enqueuing in createUploadPlan)?
+   * - createUploadPlan happens *before* the bytes are uploaded.
+   * - We only want to enqueue once we believe the object exists in S3.
+   * - Separating “plan” from “enqueue” makes failure modes cleaner:
+   *   - if upload fails, no job is created
+   *   - if upload succeeds, enqueue is explicit and idempotent
+   */
+  enqueueTaggingJob: publicProcedure
+    .input(
+      z.object({
+        imageId: z.number().int().positive(),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      // Ensure the image exists (otherwise we'd create a dangling job).
+      const imageRow = await db
+        .select({
+          id: images.id,
+          status: images.status,
+        })
+        .from(images)
+        .where(eq(images.id, input.imageId))
+        .limit(1);
+
+      const image = imageRow[0];
+      if (!image) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Image not found" });
+      }
+
+      // If the image is already indexed, there is no reason to enqueue.
+      // This is important: “no user behavior should cause unbounded paid usage”.
+      if (image.status === "indexed") {
+        return { enqueued: false as const, reason: "already_indexed" as const };
+      }
+
+      // Insert job if missing (idempotent due to unique(image_id)).
+      await db
+        .insert(tagJobs)
+        .values({
+          imageId: input.imageId,
+          status: "queued",
+          attempts: 0,
+        })
+        .onConflictDoNothing();
+
+      return { enqueued: true as const, reason: "queued" as const };
     }),
 });

@@ -18,16 +18,39 @@ import { headers } from "next/headers"; // Used to build tRPC context in the ser
 import { createCaller } from "~/server/api/root"; // Typed server-side tRPC caller factory.
 import { createTRPCContext } from "~/server/api/trpc"; // Context builder that preserves middleware invariants.
 
+/**
+ * Next.js App Router "params" boundary helper.
+ *
+ * Problem we’re solving (Next 15):
+ * - Sometimes Next provides `params` as a Promise (async dynamic API).
+ * - If we read `params.id` synchronously in those cases, Next throws:
+ *   “params should be awaited before using its properties”.
+ *
+ * So we intentionally accept both shapes:
+ * - params: { id: string }
+ * - params: Promise<{ id: string }>
+ *
+ * This keeps the page stable across Next versions and build modes.
+ */
+type ParamsShape = { id: string };
+type PropsShape = { params: ParamsShape | Promise<ParamsShape> };
+
 export default async function ImageDetailPage(props: unknown) {
   /**
    * IMPORTANT:
-   * In newer Next.js App Router versions, `params` is typed as Promise<any>
-   * at the framework boundary.
-   *
    * We intentionally accept an untyped boundary and narrow immediately.
-   * This is the correct, stable pattern for App Router pages.
+   *
+   * Fix (Next 15):
+   * - `params` might be a Promise, so we `await` it defensively.
    */
-  const { params } = props as { params: { id: string } };
+  const { params } = props as PropsShape;
+
+  /**
+   * ✅ Next 15-safe: always await, even if params is already a plain object.
+   * - `await` works on non-Promises too (it simply returns the value).
+   * - That makes this line the simplest cross-version compatibility trick.
+   */
+  const resolvedParams = await params;
 
   /**
    * Step 1: Parse the route param.
@@ -35,7 +58,7 @@ export default async function ImageDetailPage(props: unknown) {
    * Route params are strings in Next.js.
    * Our DB uses integer IDs, so we convert carefully.
    */
-  const id = Number(params.id);
+  const id = Number(resolvedParams.id);
 
   /**
    * If the URL param is not a valid positive integer,

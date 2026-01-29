@@ -306,3 +306,76 @@ export const imageTags = pgTable(
     ];
   },
 );
+
+/**
+ * Postgres-backed queue for tagging jobs.
+ *
+ * Why a table queue?
+ * - We want "no infra beyond Postgres" for MVP1.
+ * - Postgres row-level locking + SKIP LOCKED provides safe concurrency.
+ * - Unique(image_id) guarantees we never enqueue duplicates for the same image.
+ */
+export const tagJobStatusEnum = pgEnum("tag_job_status", [
+  "queued", // Waiting to be claimed.
+  "running", // Claimed by a worker.
+  "done", // Completed successfully.
+  "failed", // Completed with error (fail-closed).
+]);
+
+export const tagJobs = pgTable(
+  "tag_jobs",
+  {
+    id: serial("id").primaryKey(),
+
+    /**
+     * Which image this job is for.
+     * onDelete cascade keeps queue clean if an image is deleted.
+     */
+    imageId: integer("image_id")
+      .notNull()
+      .references(() => images.id, { onDelete: "cascade" }),
+
+    /**
+     * Job lifecycle status.
+     */
+    status: tagJobStatusEnum("status").notNull().default("queued"),
+
+    /**
+     * Attempts count for retry logic.
+     * MVP1 keeps retry minimal, but we store this now because it’s
+     * the first thing you’ll want when the worker sometimes fails.
+     */
+    attempts: integer("attempts").notNull().default(0),
+
+    /**
+     * Last error message (small) for debugging failures.
+     * We keep it as text to avoid truncation surprises.
+     */
+    lastError: text("last_error"),
+
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (t) => {
+    return [
+      /**
+       * Hard invariant: one job per image.
+       * This prevents duplicate spending and duplicate work.
+       */
+      uniqueIndex("tag_jobs_image_id_unique").on(t.imageId),
+
+      /**
+       * Worker query pattern:
+       * - find queued jobs quickly
+       * - claim oldest first (created_at ASC) for fairness
+       */
+      index("tag_jobs_status_created_at_idx").on(t.status, t.createdAt),
+    ];
+  },
+);

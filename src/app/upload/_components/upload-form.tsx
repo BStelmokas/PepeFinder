@@ -20,7 +20,7 @@
  * - Clear states: idle -> hashing -> requesting URL -> uploading -> indexing/polling -> done/failed.
  */
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "~/trpc/react"; // T3’s tRPC React client (TanStack Query) - authoritative for client reads/writes.
 
@@ -45,6 +45,7 @@ type UiStage =
   | "hashing"
   | "planning"
   | "uploading"
+  | "enqueuing"
   | "indexing"
   | "failed";
 
@@ -101,6 +102,13 @@ export function UploadForm() {
   const createPlan = api.upload.createUploadPlan.useMutation();
 
   /**
+   * New in Step 11:
+   * - enqueueTaggingJob tells the server “bytes exist, please queue worker tagging”
+   * - It is idempotent due to unique(image_id) in tag_jobs.
+   */
+  const enqueueJob = api.upload.enqueueTaggingJob.useMutation();
+
+  /**
    * Poll image.getById once we have an imageId.
    *
    * Polling strategy:
@@ -132,18 +140,32 @@ export function UploadForm() {
    */
   const polledStatus = imageQuery.data?.image.status;
 
-  // Redirect when the polled status becomes "indexed".
-  if (stage === "indexing" && imageId !== null && polledStatus === "indexed") {
-    router.push(`/image/${imageId}`);
-  }
+  /**
+   * ✅ Side-effects based on polled status belong in useEffect.
+   *
+   * This fixes:
+   * - "Cannot update a component while rendering a different component"
+   * - any accidental render loops
+   */
+  useEffect(() => {
+    // Redirect when the polled status becomes "indexed".
+    if (stage !== "indexing" || imageId === null || !polledStatus) return;
 
-  // If worker marks it failed, stop polling and show a clear message.
-  if (stage === "indexing" && imageId !== null && polledStatus === "failed") {
-    setStage("failed");
-    setError(
-      "Indexing failed. The image was stored, but tagging did not complete.",
-    );
-  }
+    if (polledStatus === "indexed") {
+      // Navigation is a side-effect → useEffect.
+      router.push(`/image/${imageId}`);
+      return;
+    }
+
+    // If worker marks it failed, stop polling and show a clear message.
+    if (polledStatus === "failed") {
+      // State updates are also side-effects → useEffect.
+      setStage("failed");
+      setError(
+        "Indexing failed. The image was stored, but tagging did not complete.",
+      );
+    }
+  }, [stage, imageId, polledStatus, router]);
 
   /**
    * Validate the selected file locally for UX.
@@ -208,15 +230,23 @@ export function UploadForm() {
       setImageId(plan.imageId);
 
       /**
-       * If it already exists:
+       * If already exists:
        * - If indexed -> go straight to detail page (best UX).
-       * - If pending/failed -> show indexing state and poll.
+       * - If pending/failed: best effort enqueue (idempotent), then poll.
+       *
+       * Why enqueue even if "failed"?
+       * - In MVP1, "failed" could mean transient worker crash.
+       * - Unique(image_id) prevents duplicates; worker retry policy decides behavior.
+       * - If you later decide “failed should never retry”, the worker can enforce that.
        */
       if (plan.alreadyExists) {
         if (plan.status === "indexed") {
           router.push(`/image/${plan.imageId}`);
           return;
         }
+
+        setStage("enqueuing");
+        await enqueueJob.mutateAsync({ imageId: plan.imageId });
 
         setStage("indexing");
         return;
@@ -248,6 +278,12 @@ export function UploadForm() {
           `Upload failed (HTTP ${putRes.status}). Check bucket CORS and credentials.`,
         );
       }
+
+      /**
+       * After bytes exist, enqueue the worker job (idempotent).
+       */
+      setStage("enqueuing");
+      await enqueueJob.mutateAsync({ imageId: plan.imageId });
 
       /**
        * Step 4: Enter indexing state and poll.
@@ -295,6 +331,7 @@ export function UploadForm() {
             stage === "hashing" ||
             stage === "planning" ||
             stage === "uploading" ||
+            stage === "enqueuing" ||
             stage === "indexing"
           }
         />
@@ -326,12 +363,14 @@ export function UploadForm() {
             stage === "hashing" ||
             stage === "planning" ||
             stage === "uploading" ||
+            stage === "enqueuing" ||
             stage === "indexing"
           }
         >
           {stage === "hashing" && "Hashing..."}
           {stage === "planning" && "Preparing..."}
           {stage === "uploading" && "Uploading..."}
+          {stage === "enqueuing" && "Queuing..."}
           {stage === "indexing" && "Indexing..."}
           {(stage === "idle" || stage === "validating" || stage === "failed") &&
             "Upload"}
