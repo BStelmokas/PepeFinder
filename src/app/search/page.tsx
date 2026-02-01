@@ -60,6 +60,24 @@ export default async function SearchPage(props: unknown) {
   const api = createCaller(ctx);
 
   /**
+   * ============================================================
+   * CHANGE HERE (typing fix: no `any`, Vercel-safe)
+   * ------------------------------------------------------------
+   * We derive the output type from the procedure itself.
+   *
+   * Why:
+   * - Avoids (r as any) which breaks strict lint/typecheck in Vercel.
+   * - Keeps types in sync automatically if the procedure output changes.
+   *
+   * How it works:
+   * - `typeof api.search.searchImages` is the actual function type.
+   * - `ReturnType<...>` gives the promise type.
+   * - `Awaited<...>` unwraps the promise into the actual output.
+   * ============================================================
+   */
+  type SearchImagesOutput = Awaited<ReturnType<typeof api.search.searchImages>>;
+
+  /**
    * Step 3: Execute the search via tRPC.
    *
    * This hits our DB-only search procedure and returns:
@@ -68,7 +86,7 @@ export default async function SearchPage(props: unknown) {
    * - createdAt
    * - matchCount
    */
-  const results = await api.search.searchImages({ q });
+  const results: SearchImagesOutput = await api.search.searchImages({ q });
 
   return (
     <main className="min-h-screen bg-white">
@@ -113,7 +131,7 @@ export default async function SearchPage(props: unknown) {
               <div className="aspect-square overflow-hidden rounded-2xl">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={r.storageKey}
+                  src={r.renderUrl ?? r.storageKey}
                   alt={`Pepe image ${r.id}`}
                   className="h-full w-full object-cover transition-transform group-hover:scale-[1.02]"
                   loading="lazy"

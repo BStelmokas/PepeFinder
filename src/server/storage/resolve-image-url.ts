@@ -101,6 +101,13 @@ export async function resolveImageUrl(params: {
    * is often the simplest approach (no extra signing step per page load).
    */
 
+  /**
+   * We pick TTL based on who is fetching:
+   * - model: very short (worker uses immediately)
+   * - browser: longer (user may keep the page open; thumbnails shouldn’t expire instantly)
+   */
+  const signedTtlSeconds = consumer === "model" ? 60 : 60 * 10; // 1 min for model, 10 min for browser/server UI rendering
+
   // If the consumer is a browser, we prefer public URL if configured.
   if (consumer === "browser") {
     // publicUrlForKey will work only if S3_PUBLIC_BASE_URL is valid and intended for browser use.
@@ -111,27 +118,22 @@ export async function resolveImageUrl(params: {
     // We must explicitly handle the null case.
     const publicUrl = publicUrlForKey(storageKey);
 
-    if (!publicUrl) {
-      throw new Error(
-        `Cannot resolve browser image URL for key "${storageKey}": ` +
-          `S3_PUBLIC_BASE_URL is not configured. ` +
-          `Either configure a public base URL or switch the UI to signed URLs.`,
-      );
+    if (publicUrl) {
+      return publicUrl;
     }
 
-    return publicUrl;
+    // Private bucket: signed URL fallback.
+    return await createPresignedGetUrl({
+      key: storageKey,
+      expiresInSeconds: signedTtlSeconds,
+    });
   }
 
   /**
-   * For server/model consumers, we prefer signed URLs (safer default).
-   * We keep TTL short because the worker uses it immediately.
+   * For server/model consumers, prefer signed URLs (least privilege).
+   * Keeping it private matches “private corpus” semantics by default.
    */
-  const signedTtlSeconds = 60;
 
-  /**
-   * Server / model consumers:
-   * Prefer short-lived signed URLs (private bucket, least privilege).
-   */
   return await createPresignedGetUrl({
     key: storageKey,
     expiresInSeconds: signedTtlSeconds,

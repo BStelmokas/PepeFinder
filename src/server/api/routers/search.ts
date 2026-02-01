@@ -15,6 +15,7 @@ import { and, desc, eq, inArray, sql } from "drizzle-orm"; // Drizzle query buil
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc"; // T3’s canonical tRPC router/procedure helpers.
 import { imageTags, images, tags } from "~/server/db/schema"; // Typed table definitions from our schema (source of truth).
 import { tokenizeQuery } from "~/lib/text/normalize"; // Frozen tokenization logic (pure module, reused everywhere).
+import { resolveImageUrlForBrowser } from "~/server/storage/resolve-image-url";
 
 export const searchRouter = createTRPCRouter({
   /**
@@ -147,6 +148,41 @@ export const searchRouter = createTRPCRouter({
           200,
         );
 
-      return results;
+      /**
+       * We now attach `renderUrl` for each result row.
+       *
+       * Why:
+       * - storageKey can be an S3 object key like "images/<sha>.jpg"
+       * - browsers require a URL for <img src="...">
+       *
+       * Why this is safe:
+       * - We keep storageKey unchanged (backwards compatibility)
+       * - We add renderUrl as extra optional data
+       * - We catch resolver errors per row and fall back to storageKey
+       *   so search doesn’t fail if one row is weird.
+       */
+      const resultsWithRenderUrl = await Promise.all(
+        results.map(async (r) => {
+          try {
+            return {
+              ...r,
+
+              // Derived field used by the UI for thumbnails.
+              // This uses the centralized resolver so we do not duplicate storage policy.
+              renderUrl: await resolveImageUrlForBrowser(r.storageKey),
+            };
+          } catch (err) {
+            // Fail-soft: do not break search if URL resolution fails.
+            // The UI will likely fail to load the image, but the page still renders.
+            return {
+              ...r,
+              renderUrl: r.storageKey, // Best-effort fallback.
+            };
+          }
+        }),
+      );
+
+      // Return the enhanced results.
+      return resultsWithRenderUrl;
     }),
 });
