@@ -76,6 +76,27 @@ function isTagKind(v: unknown): v is TagKind {
 }
 
 /**
+ * Tiny helper: is a value a plain object (record)?
+ *
+ * This is the core primitive for avoiding `(x as any)`:
+ * - We never access properties on unknown until we prove it's an object.
+ */
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null;
+}
+
+/**
+ * Tiny helper: safe property read from an unknown record.
+ *
+ * Why it exists:
+ * - ESLint forbids unsafe member access on `any`.
+ * - Keeping everything as `unknown` + narrowing avoids those rules entirely.
+ */
+function getProp(obj: Record<string, unknown>, key: string): unknown {
+  return obj[key];
+}
+
+/**
  * Extract the first assistant "output_text" block from the Responses API response.
  *
  * Why isolate this:
@@ -83,32 +104,136 @@ function isTagKind(v: unknown): v is TagKind {
  * - The rest of the code should only care about the final string output.
  */
 function extractFirstOutputText(resp: unknown): string {
-  if (typeof resp !== "object" || resp === null) {
+  if (!isRecord(resp)) {
     throw new Error("OpenAI response was not an object.");
   }
 
-  const output = (resp as any).output;
+  const output = getProp(resp, "output");
   if (!Array.isArray(output)) {
     throw new Error("OpenAI response missing output array.");
   }
 
   for (const item of output) {
-    // Responses API emits "message" objects that contain the assistant content.
-    if (item?.type !== "message") continue;
-    if (item?.role !== "assistant") continue;
+    if (!isRecord(item)) continue;
 
-    const content = item?.content;
+    const type = getProp(item, "type");
+    const role = getProp(item, "role");
+
+    // Responses API emits "message" objects that contain the assistant content.
+    if (type !== "message") continue;
+    if (role !== "assistant") continue;
+
+    const content = getProp(item, "content");
     if (!Array.isArray(content)) continue;
 
     for (const part of content) {
       // "output_text" carries the model's text output.
-      if (part?.type === "output_text" && typeof part?.text === "string") {
-        return part.text;
+      if (!isRecord(part)) continue;
+
+      const partType = getProp(part, "type");
+      if (partType !== "output_text") continue;
+
+      const text = getProp(part, "text");
+      if (typeof text === "string") {
+        return text;
       }
     }
   }
 
   throw new Error("OpenAI response contained no assistant output_text.");
+}
+
+/**
+ * Parse the model JSON output into our typed ModelTaggingResult.
+ *
+ * This is where we enforce:
+ * - top-level object shape
+ * - caption is a string
+ * - tags is an array of objects with name/confidence/kind
+ * - confidence is clamped
+ * - name is normalized
+ * - tags are de-duped
+ *
+ * Doing this parsing in a separate function keeps tagImageWithOpenAI() readable.
+ */
+function parseModelJson(outputText: string): ModelTaggingResult {
+  let parsed: unknown;
+
+  try {
+    parsed = JSON.parse(outputText);
+  } catch {
+    // Fail loudly: if JSON parsing fails, the prompt contract is broken.
+    throw new Error(
+      `OpenAI did not return valid JSON. Raw output: ${outputText}`,
+    );
+  }
+
+  if (!isRecord(parsed)) {
+    throw new Error(`OpenAI JSON was not an object. Raw output: ${outputText}`);
+  }
+
+  const captionVal = getProp(parsed, "caption");
+  const tagsVal = getProp(parsed, "tags");
+
+  if (typeof captionVal !== "string") {
+    throw new Error(
+      `OpenAI JSON missing caption string. Raw output: ${outputText}`,
+    );
+  }
+
+  if (!Array.isArray(tagsVal)) {
+    throw new Error(
+      `OpenAI JSON missing tags array. Raw output: ${outputText}`,
+    );
+  }
+
+  const cleaned: ModelTag[] = [];
+
+  for (const item of tagsVal) {
+    if (!isRecord(item)) continue;
+
+    const nameVal = getProp(item, "name");
+    const confidenceVal = getProp(item, "confidence");
+    const kindVal = getProp(item, "kind");
+
+    if (typeof nameVal !== "string") continue;
+    if (typeof confidenceVal !== "number") continue;
+    if (!isTagKind(kindVal)) continue;
+
+    // Clamp confidence defensively.
+    const clampedConfidence = Math.max(0, Math.min(1, confidenceVal));
+
+    // Normalize tag name using frozen semantics.
+    const normalizedName = normalizeTagName(nameVal);
+    if (!normalizedName) continue;
+
+    cleaned.push({
+      name: normalizedName,
+      confidence: clampedConfidence,
+      kind: kindVal,
+    });
+  }
+
+  // De-dupe by tag name, keep the highest confidence.
+  const byName = new Map<string, ModelTag>();
+  for (const t of cleaned) {
+    const prev = byName.get(t.name);
+    if (!prev || t.confidence > prev.confidence) {
+      byName.set(t.name, t);
+    }
+  }
+
+  // Deterministic ordering for stability.
+  const deduped = Array.from(byName.values()).sort((a, b) => {
+    if (b.confidence !== a.confidence) return b.confidence - a.confidence;
+    // Secondary tie-break: name ascending for full determinism.
+    return a.name.localeCompare(b.name);
+  });
+
+  return {
+    caption: captionVal.trim(),
+    tags: deduped,
+  };
 }
 
 /**
@@ -195,92 +320,5 @@ export async function tagImageWithOpenAI(params: {
   const json = (await res.json()) as unknown;
   const outputText = extractFirstOutputText(json);
 
-  // The model *should* return strict JSON, but we still guard parsing.
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(outputText);
-  } catch (e) {
-    throw new Error(
-      `OpenAI did not return valid JSON. Raw output: ${outputText}`,
-    );
-  }
-
-  // Validate top-level shape: { caption: string, tags: array }
-  if (typeof parsed !== "object" || parsed === null) {
-    throw new Error(`OpenAI JSON was not an object. Raw output: ${outputText}`);
-  }
-
-  const caption = (parsed as any).caption;
-  const rawTags = (parsed as any).tags;
-
-  if (typeof caption !== "string") {
-    throw new Error(
-      `OpenAI JSON missing caption string. Raw output: ${outputText}`,
-    );
-  }
-
-  if (!Array.isArray(rawTags)) {
-    throw new Error(
-      `OpenAI JSON missing tags array. Raw output: ${outputText}`,
-    );
-  }
-
-  /**
-   * Convert raw tags → normalized ModelTag[].
-   *
-   * We are intentionally defensive:
-   * - We skip invalid items rather than failing the whole job.
-   * - We clamp confidence.
-   * - We normalize names via frozen rules.
-   * - We validate kind is within the allowed union.
-   *
-   * The worker already treats model failures as “job failed”,
-   * but within a successful response we still prefer partial salvage.
-   */
-  const cleaned: ModelTag[] = [];
-
-  // Convert into our normalized, bounded ModelTag format.
-  for (const item of rawTags) {
-    if (typeof item !== "object" || item === null) continue;
-
-    const name = (item as any).name;
-    const confidence = (item as any).confidence;
-    const kind = (item as any).kind;
-
-    if (typeof name !== "string") continue;
-    if (typeof confidence !== "number") continue;
-    if (!isTagKind(kind)) continue;
-
-    // Clamp confidence to [0, 1] so UI and DB stay sane even if model goes weird.
-    const clamped = Math.max(0, Math.min(1, confidence));
-
-    // Normalize tag names using frozen semantics.
-    const normalized = normalizeTagName(name);
-
-    // If normalization collapses to empty, skip.
-    if (!normalized) continue;
-
-    cleaned.push({ name: normalized, confidence: clamped, kind });
-  }
-
-  // De-dupe by name, keep highest confidence if duplicates exist.
-  const byName = new Map<string, ModelTag>();
-  for (const t of cleaned) {
-    const prev = byName.get(t.name);
-    if (!prev || t.confidence > prev.confidence) {
-      byName.set(t.name, t);
-    }
-  }
-
-  // Deterministic ordering for stable display/debugging.
-  const deduped = Array.from(byName.values()).sort((a, b) => {
-    if (b.confidence !== a.confidence) return b.confidence - a.confidence;
-    // Secondary tie-break: name ascending for full determinism.
-    return a.name.localeCompare(b.name);
-  });
-
-  return {
-    caption: caption.trim(),
-    tags: deduped,
-  };
+  return parseModelJson(outputText);
 }

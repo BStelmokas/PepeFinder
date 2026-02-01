@@ -23,7 +23,6 @@
  */
 
 import { createPresignedGetUrl, publicUrlForKey } from "~/server/storage/s3"; // Storage adapter: knows how to build URLs / sign URLs.
-import { env } from "~/env"; // Env is validated centrally; we use it only for policy decisions.
 
 /**
  * Enumerates which "consumer" will fetch the image.
