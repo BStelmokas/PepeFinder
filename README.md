@@ -210,3 +210,30 @@ UI components communicate exclusively with typed procedures, which orchestrate p
 All expensive AI work runs asynchronously in workers, ensuring a DB-only, deterministic request path for search and browsing.
 
 ---
+
+## Cost-safety & operational knobs (MVP1)
+
+PepeFinder’s **request path never calls paid AI**. All vision/LLM calls happen in the **tagging worker** only.
+
+### Hard safety invariants
+
+- **Kill switch**: set `TAGGING_PAUSED=true` to immediately stop all model calls (search and browsing still work).
+- **Daily cap**: `TAGGING_DAILY_CAP` limits how many jobs can reach “done” per UTC day.
+- **Strict timeouts**: `OPENAI_VISION_TIMEOUT_MS` is a hard abort per model request (fail-closed).
+
+### Environment variables
+
+Worker-only / server-only:
+
+- `TAGGING_PAUSED` (`true` / `false`, default `false`)
+- `TAGGING_DAILY_CAP` (integer as string, default `100`)
+- `OPENAI_API_KEY` (required)
+- `OPENAI_VISION_MODEL` (default `gpt-4.1-mini`)
+- `OPENAI_VISION_TIMEOUT_MS` (default `15000`)
+
+### Failure behavior (fail-closed)
+
+- If paused or cap exceeded: jobs are returned to `queued` (deferred), nothing is billed.
+- If the model times out or errors: job becomes `failed`, image becomes `failed`, and `tag_jobs.last_error` is recorded for debugging.
+
+---

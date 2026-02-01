@@ -59,6 +59,26 @@ export const env = createEnv({
     // Simple global cap: max completed jobs per UTC day.
     // This is intentionally blunt for MVP1 to prevent runaway spending.
     TAGGING_DAILY_CAP: z.coerce.number().int().min(0).default(200),
+
+    // --- OpenAI (added in Step 12) ---
+    /**
+     * OPENAI_API_KEY is now OPTIONAL so `pnpm dev` can run without worker config.
+     *
+     * Why:
+     * - Next.js loads env at startup (via next.config imports).
+     * - We only need OpenAI secrets when the *worker* runs.
+     * - The request path must never call the model anyway.
+     *
+     * Enforcement will move to the worker (runtime check + fail-closed).
+     */
+    OPENAI_API_KEY: z.string().min(1).optional(), // Secret key used only inside the worker process.
+    OPENAI_VISION_MODEL: z.string().min(1).optional().default("gpt-4.1-mini"), // Reasonable default vision-capable model.
+    OPENAI_VISION_TIMEOUT_MS: z.coerce
+      .number()
+      .int()
+      .min(1_000) // sanity floor: 1s minimum
+      .max(60_000) // sanity ceiling: 60s max (prevents runaway hangs)
+      .default(15_000),
   },
 
   /**
@@ -88,6 +108,10 @@ export const env = createEnv({
 
     TAGGING_PAUSED: process.env.TAGGING_PAUSED,
     TAGGING_DAILY_CAP: process.env.TAGGING_DAILY_CAP,
+
+    OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+    OPENAI_VISION_MODEL: process.env.OPENAI_VISION_MODEL,
+    OPENAI_VISION_TIMEOUT_MS: process.env.OPENAI_VISION_TIMEOUT_MS,
   },
   /**
    * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially

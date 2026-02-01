@@ -46,7 +46,7 @@ export default async function ImageDetailPage(props: unknown) {
   const { params } = props as PropsShape;
 
   /**
-   * ✅ Next 15-safe: always await, even if params is already a plain object.
+   * Next 15-safe: always await, even if params is already a plain object.
    * - `await` works on non-Promises too (it simply returns the value).
    * - That makes this line the simplest cross-version compatibility trick.
    */

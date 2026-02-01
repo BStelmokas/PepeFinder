@@ -28,6 +28,8 @@ import { db } from "~/server/db";
 import { env } from "~/env";
 import { imageTags, images, tagJobs, tags } from "~/server/db/schema";
 import { normalizeTagName } from "~/lib/text/normalize";
+import { tagImageWithOpenAI } from "~/server/ai/openai-vision-tagger";
+import { resolveImageUrlForModel } from "~/server/storage/resolve-image-url";
 
 /**
  * Small sleep helper so we can “poll” the DB without busy-waiting.
@@ -62,15 +64,16 @@ type TagSuggestion = {
  * Later: replace this function with real vision tagging.
  * Keep its input/output shape the same to avoid refactoring the pipeline.
  */
-async function runTagger(args: { sha256: string }): Promise<TagSuggestion[]> {
-  const prefix = args.sha256.slice(0, 8);
 
-  return [
-    { name: "pepe", confidence: 0.9 },
-    { name: "meme", confidence: 0.8 },
-    { name: `sha-${prefix}`, confidence: 0.7 },
-  ];
-}
+// async function runTagger(args: { sha256: string }): Promise<TagSuggestion[]> {
+//   const prefix = args.sha256.slice(0, 8);
+
+//   return [
+//     { name: "pepe", confidence: 0.9 },
+//     { name: "meme", confidence: 0.8 },
+//     { name: `sha-${prefix}`, confidence: 0.7 },
+//   ];
+// }
 
 /**
  * Claim a single queued job using SKIP LOCKED.
@@ -214,6 +217,7 @@ async function processJob(args: {
         id: images.id,
         sha256: images.sha256,
         status: images.status,
+        storageKey: images.storageKey,
       })
       .from(images)
       .where(sql`${images.id} = ${args.imageId}`)
@@ -235,7 +239,23 @@ async function processJob(args: {
     }
 
     // Run tagger (placeholder now; real model later).
-    const suggestions = await runTagger({ sha256: image.sha256 });
+    // const suggestions = await runTagger({ sha256: image.sha256 });
+
+    // Resolve a URL the model can fetch.
+    const imageUrl = await resolveImageUrlForModel(image.storageKey);
+
+    // Call the real model tagger (adapter enforces strict timeout + JSON parsing).
+    const result = await tagImageWithOpenAI({ imageUrl });
+
+    // We ignore caption for now (MVP1 scope), but logging it can be helpful for debugging.
+    console.log(`caption(image_id=${image.id}): ${result.caption}`);
+
+    // Convert ModelTag (with kind) -> persistence tags.
+    // We intentionally ignore `kind` for MVP1, but you could later store it if desired.
+    const suggestions: TagSuggestion[] = result.tags.map((t) => ({
+      name: t.name,
+      confidence: t.confidence,
+    }));
 
     // Write tags + join rows atomically.
     await writeTagsForImage({ imageId: image.id, suggestions });
@@ -305,6 +325,22 @@ async function main(): Promise<void> {
     if (env.TAGGING_PAUSED === "true") {
       console.log("TAGGING_PAUSE=true → worker is paused. ");
       await sleep(60000); // 60 seconds
+      continue;
+    }
+
+    /**
+     * If OPENAI_API_KEY is missing, we fail-closed by pausing job processing.
+     *
+     * Why pause instead of crashing?
+     * - Crashing causes restart loops / noisy logs.
+     * - Pausing is safer and makes the worker “operator-friendly”.
+     * - Search/browse continues to work; only tagging is halted.
+     */
+    if (!env.OPENAI_API_KEY) {
+      console.log(
+        "OPENAI_API_KEY is not set → worker will not process jobs. Set OPENAI_API_KEY to enable tagging.",
+      );
+      await sleep(5000);
       continue;
     }
 

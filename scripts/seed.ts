@@ -37,7 +37,7 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 
-import { db } from "~/server/db"; // ✅ Required: singleton DB instance (do not instantiate elsewhere).
+import { db } from "~/server/db"; // Required: singleton DB instance (do not instantiate elsewhere).
 import { imageTags, images, tags } from "~/server/db/schema"; // DB schema tables (typed).
 import { normalizeTagName } from "~/lib/text/normalize"; // Frozen tag normalization (must match query semantics).
 import { eq } from "drizzle-orm"; // Typed SQL operator for lookups.
@@ -332,7 +332,7 @@ async function main(): Promise<void> {
     imagesProcessed++;
   }
 
-  console.log(`✅ Seed complete`);
+  console.log(`Seed complete`);
   console.log(`- images processed: ${imagesProcessed}`);
   console.log(`- tag links created: ${tagLinksCreated}`);
   console.log(`- invalid tags skipped: ${invalidTagsSkipped}`);

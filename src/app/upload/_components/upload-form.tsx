@@ -141,7 +141,7 @@ export function UploadForm() {
   const polledStatus = imageQuery.data?.image.status;
 
   /**
-   * ✅ Side-effects based on polled status belong in useEffect.
+   * Side-effects based on polled status belong in useEffect.
    *
    * This fixes:
    * - "Cannot update a component while rendering a different component"
