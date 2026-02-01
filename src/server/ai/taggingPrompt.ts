@@ -46,7 +46,7 @@ export const instruction = [
 
   // --- Tag list size + style (search primitives) ---
   "tags rules:",
-  "- Produce 18 to 35 tags total (not counting the caption).",
+  "- Produce 25 to 45 tags total (not counting the caption).",
   "- Prefer fewer tags over inventing uncertain ones to reach the count.",
   "- Each tag name must be 1–2 words (3 max only if truly necessary).",
   "- Prefer lowercase ASCII; avoid emojis; avoid punctuation except hyphens.",
