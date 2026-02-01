@@ -24,29 +24,17 @@ import { createCaller } from "~/server/api/root"; // Typed server-side tRPC call
 import { createTRPCContext } from "~/server/api/trpc"; // Context builder used by tRPC middleware (even in server calls).
 
 /**
- * A small helper type describing what Next can give us for search params.
+ * The shape Next provides for the resolved search params object.
  *
- * Why:
- * - Next can emit string | string[] | undefined for each key.
- * - We want deterministic parsing logic and types.
+ * Why this type:
+ * - Next keys map to string | string[] | undefined.
+ * - We want deterministic parsing logic for q.
  */
-type SearchParams = Record<string, string | string[] | undefined>;
+type ResolvedSearchParams = Record<string, string | string[] | undefined>;
 
-/**
- * Next.js page props type for this route.
- *
- * Key detail:
- * - `searchParams` can be either:
- *   - SearchParams (sync)
- *   - Promise<SearchParams> (async boundary in Next 15)
- *
- * We support both and normalize by awaiting.
- */
-type SearchPageProps = {
-  searchParams: SearchParams | Promise<SearchParams>;
-};
-
-export default async function SearchPage(props: SearchPageProps) {
+export default async function SearchPage(props: {
+  searchParams?: Promise<ResolvedSearchParams>;
+}) {
   /**
    * IMPORTANT:
    * In newer Next.js App Router versions, `searchParams` is typed as Promise<any>
@@ -54,7 +42,7 @@ export default async function SearchPage(props: SearchPageProps) {
    *
    * We accept an untyped boundary and narrow immediately.
    */
-  const searchParams = await props.searchParams;
+  const searchParams: ResolvedSearchParams = (await props.searchParams) ?? {};
 
   /**
    * Step 1: Read q from the URL.
