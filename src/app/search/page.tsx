@@ -23,7 +23,30 @@ import { headers } from "next/headers"; // Provides request headers (we’ll use
 import { createCaller } from "~/server/api/root"; // Typed server-side tRPC caller factory.
 import { createTRPCContext } from "~/server/api/trpc"; // Context builder used by tRPC middleware (even in server calls).
 
-export default async function SearchPage(props: unknown) {
+/**
+ * A small helper type describing what Next can give us for search params.
+ *
+ * Why:
+ * - Next can emit string | string[] | undefined for each key.
+ * - We want deterministic parsing logic and types.
+ */
+type SearchParams = Record<string, string | string[] | undefined>;
+
+/**
+ * Next.js page props type for this route.
+ *
+ * Key detail:
+ * - `searchParams` can be either:
+ *   - SearchParams (sync)
+ *   - Promise<SearchParams> (async boundary in Next 15)
+ *
+ * We support both and normalize by awaiting.
+ */
+type SearchPageProps = {
+  searchParams: SearchParams | Promise<SearchParams>;
+};
+
+export default async function SearchPage(props: SearchPageProps) {
   /**
    * IMPORTANT:
    * In newer Next.js App Router versions, `searchParams` is typed as Promise<any>
@@ -31,9 +54,7 @@ export default async function SearchPage(props: unknown) {
    *
    * We accept an untyped boundary and narrow immediately.
    */
-  const { searchParams } = props as {
-    searchParams: Record<string, string | string[] | undefined>;
-  };
+  const searchParams = await props.searchParams;
 
   /**
    * Step 1: Read q from the URL.
