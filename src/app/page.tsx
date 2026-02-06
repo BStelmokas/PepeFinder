@@ -27,8 +27,10 @@ export default function HomePage() {
         </h1>
         {/* A small subtitle explains the value prop without adding UI complexity. */}
         <p className="mt-3 text-center text-sm text-gray-600">
-          Search for Pepe images using visual keywords. No more googling in
-          despair. Just describe what you see.
+          No more googling in despair.
+        </p>
+        <p className="text-center text-sm text-gray-600">
+          Search Pepe images by describing what you see.
         </p>
         {/* GET form -> /search?q=... (URL is the contract). */}
         <form
@@ -67,12 +69,7 @@ export default function HomePage() {
 
           {/* Hint text: reinforces the frozen semantics gently. */}
           <p className="mt-3 text-xs text-gray-500">
-            Describe every{" "}
-            <span className="font-medium text-gray-900">
-              Emotion | Object | Action | Event | Person | Color | Setting |
-              Style
-            </span>{" "}
-            you&apos;re looking for
+            Person | Object | Color | Action | Emotion | Setting | Event
           </p>
         </form>
       </div>
