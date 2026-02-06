@@ -19,6 +19,7 @@ import {
   S3Client,
   PutObjectCommand,
   GetObjectCommand,
+  DeleteObjectCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
@@ -48,19 +49,17 @@ const s3 = new S3Client({
   },
 
   /**
-   * Endpoint is optional:
-   * - Required for most S3-compatible providers (R2/MinIO).
-   * - Optional for AWS S3.
+   * Endpoint is required for R2:
    */
   endpoint: env.S3_ENDPOINT,
 
   /**
-   * S3-compatible providers often need path-style access.
-   * AWS S3 generally prefers virtual-hosted style.
+   * Cloudflare R2 is S3-compatible, but it commonly requires *path-style* addressing.
    *
-   * We do NOT force forcePathStyle here because it depends on the provider.
-   * If your provider requires it, we can add an env flag later.
+   * In practice, enabling this avoids a class of “signature does not match”
+   * and bucket-hostname resolution issues you can hit with virtual-hosted style.
    */
+  forcePathStyle: true,
 });
 
 /**
@@ -100,6 +99,42 @@ export async function createPresignedGetUrl(args: {
   });
 
   return await getSignedUrl(s3, cmd, { expiresIn: args.expiresInSeconds });
+}
+
+/**
+ * Direct upload for scripts (MVP2 ingestion).
+ *
+ * Why direct upload here?
+ * - scripts run server-side, not in a browser
+ * - presigned URLs add complexity and provide no real benefit offline
+ */
+export async function putObject(params: {
+  key: string;
+  body: Uint8Array;
+  contentType: string;
+}): Promise<void> {
+  const cmd = new PutObjectCommand({
+    Bucket: env.S3_BUCKET,
+    Key: params.key,
+    Body: params.body,
+    ContentType: params.contentType,
+  });
+
+  await s3.send(cmd);
+}
+
+/**
+ * Direct delete for takedown script.
+ *
+ * This supports “delete object + DB row” takedowns.
+ */
+export async function deleteObject(params: { key: string }): Promise<void> {
+  const cmd = new DeleteObjectCommand({
+    Bucket: env.S3_BUCKET,
+    Key: params.key,
+  });
+
+  await s3.send(cmd);
 }
 
 /**

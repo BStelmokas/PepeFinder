@@ -79,6 +79,40 @@ export const env = createEnv({
       .min(1_000) // sanity floor: 1s minimum
       .max(60_000) // sanity ceiling: 60s max (prevents runaway hangs)
       .default(15_000),
+
+    /**
+     * MVP2: Reddit script authentication (manual batch only).
+     *
+     * We use the “script” app flow (username/password) because:
+     * - this is not a multi-user product feature
+     * - it is a manual operator script
+     * - we want the smallest moving parts
+     *
+     * You create a script app in Reddit prefs/apps, then use client id/secret + account creds.
+     */
+    REDDIT_CLIENT_ID: z.string().min(1).optional(),
+    REDDIT_CLIENT_SECRET: z.string().min(1).optional(),
+    REDDIT_USERNAME: z.string().min(1).optional(),
+    REDDIT_PASSWORD: z.string().min(1).optional(),
+
+    /**
+     * Reddit requires a descriptive User-Agent; generic ones get throttled harder.
+     * Use something like: "pepefinder:ingest:v1 (by u/yourname)"
+     */
+    REDDIT_USER_AGENT: z.string().min(1).optional(),
+
+    /**
+     * Script knobs (manual runs).
+     */
+    REDDIT_SUBREDDIT: z.string().min(1).optional().default("pepethefrog"),
+    REDDIT_SORT: z.enum(["new", "top"]).optional().default("new"),
+    REDDIT_LIMIT: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(100)
+      .optional()
+      .default(25),
   },
 
   /**
@@ -112,6 +146,16 @@ export const env = createEnv({
     OPENAI_API_KEY: process.env.OPENAI_API_KEY,
     OPENAI_VISION_MODEL: process.env.OPENAI_VISION_MODEL,
     OPENAI_VISION_TIMEOUT_MS: process.env.OPENAI_VISION_TIMEOUT_MS,
+
+    REDDIT_CLIENT_ID: process.env.REDDIT_CLIENT_ID,
+    REDDIT_CLIENT_SECRET: process.env.REDDIT_CLIENT_SECRET,
+    REDDIT_USERNAME: process.env.REDDIT_USERNAME,
+    REDDIT_PASSWORD: process.env.REDDIT_PASSWORD,
+    REDDIT_USER_AGENT: process.env.REDDIT_USER_AGENT,
+
+    REDDIT_SUBREDDIT: process.env.REDDIT_SUBREDDIT,
+    REDDIT_SORT: process.env.REDDIT_SORT,
+    REDDIT_LIMIT: process.env.REDDIT_LIMIT,
   },
   /**
    * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially

@@ -126,6 +126,14 @@ export const images = pgTable(
      */
     source: varchar("source", { length: 32 }), // e.g. "seed", "reddit" (later), "manual" — intentionally small/freeform.
     sourceRef: text("source_ref"), // e.g. a Reddit post id or URL — flexible text to avoid premature modeling.
+
+    /**
+     * MVP2 additions (strictly minimal, but very useful):
+     * - subreddit gives you traceability for content provenance
+     * - post URL gives you an easy takedown/audit trail
+     */
+    sourceSubreddit: varchar("source_subreddit", { length: 64 }),
+    sourceUrl: text("source_url"),
   },
   (t) => {
     return [
@@ -153,6 +161,15 @@ export const images = pgTable(
        * Postgres can use this index to speed up sorting when the candidate set is already filtered.
        */
       index("images_created_at_id_idx").on(t.createdAt, t.id),
+
+      /**
+       * MVP2 idempotency by source post:
+       * Unique(source, source_ref) ensures we never create two DB rows for the same reddit post.
+       *
+       * Postgres allows multiple NULLs in UNIQUE indexes, so this won’t break seed images
+       * (which typically have null source/sourceRef).
+       */
+      uniqueIndex("images_source_source_ref_unique").on(t.source, t.sourceRef),
     ];
   },
 );

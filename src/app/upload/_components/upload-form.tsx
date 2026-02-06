@@ -34,7 +34,6 @@ const ALLOWED_IMAGE_MIME_TYPES = new Set([
   "image/png",
   "image/jpeg",
   "image/webp",
-  "image/gif",
 ]);
 
 const MAX_UPLOAD_BYTES = 8 * 1024 * 1024; // 8 MiB
@@ -302,7 +301,7 @@ export function UploadForm() {
     <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-sm">
       <h2 className="text-sm font-semibold text-gray-900">Upload an image</h2>
       <p className="mt-1 text-xs text-gray-500">
-        Allowed: PNG, JPEG, WebP, GIF. Max{" "}
+        Allowed: PNG, JPEG, WebP. Max{" "}
         {Math.floor(MAX_UPLOAD_BYTES / (1024 * 1024))} MiB.
       </p>
 
@@ -318,7 +317,7 @@ export function UploadForm() {
         <input
           id="file"
           type="file"
-          accept="image/png,image/jpeg,image/webp,image/gif"
+          accept="image/png,image/jpeg,image/webp"
           className="mt-2 block w-full cursor-pointer rounded-xl border border-gray-200 bg-white p-3 text-sm text-gray-900 shadow-sm file:mr-4 file:rounded-lg file:border-0 file:bg-gray-100 file:px-3 file:py-2 file:text-sm file:font-medium file:text-gray-700 hover:file:bg-gray-200"
           onChange={(e) => {
             const f = e.target.files?.[0] ?? null;

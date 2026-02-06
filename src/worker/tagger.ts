@@ -139,7 +139,7 @@ async function countDoneJobsToday(): Promise<number> {
 		SELECT COUNT(*)::int as n
 		FROM tag_jobs
 		WHERE status = 'done'
-			AND created_at >= date_trunc('day', NOW())
+			AND created_at >= (date_trunc('day', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC')
 		`);
 
   return res[0]?.n ?? 0;

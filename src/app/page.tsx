@@ -48,7 +48,7 @@ export default function HomePage() {
               id="q"
               name="q"
               type="text"
-              placeholder="e.g. pepe sad blue sweater red cap crying..."
+              placeholder="e.g. pepe red cap happy smiling ice cream..."
               className="flex-1 rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 shadow-sm outline-none placeholder:text-gray-400 focus:border-gray-300"
               // Defaulting autoComplete off keeps weird browser suggestions from dominating the MVP UI.
               autoComplete="off"
