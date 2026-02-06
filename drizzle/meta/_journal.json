@@ -5,15 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1769698126446,
-      "tag": "0000_add_tag_jobs",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1770344443809,
-      "tag": "0001_wet_jackal",
+      "when": 1770344600423,
+      "tag": "0000_sleepy_red_wolf",
       "breakpoints": true
     }
   ]

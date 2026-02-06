@@ -1,5 +1,5 @@
 {
-  "id": "a59fc0bd-8dcb-43f2-8f5f-c3fa36faad23",
+  "id": "5a06c672-5217-4e5d-a688-7c1150775d42",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -84,8 +84,12 @@
           "name": "image_tags_image_id_images_id_fk",
           "tableFrom": "image_tags",
           "tableTo": "images",
-          "columnsFrom": ["image_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "image_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -93,8 +97,12 @@
           "name": "image_tags_tag_id_tags_id_fk",
           "tableFrom": "image_tags",
           "tableTo": "tags",
-          "columnsFrom": ["tag_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "tag_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -102,7 +110,10 @@
       "compositePrimaryKeys": {
         "image_tags_image_id_tag_id_pk": {
           "name": "image_tags_image_id_tag_id_pk",
-          "columns": ["image_id", "tag_id"]
+          "columns": [
+            "image_id",
+            "tag_id"
+          ]
         }
       },
       "uniqueConstraints": {},
@@ -167,6 +178,18 @@
         },
         "source_ref": {
           "name": "source_ref",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source_subreddit": {
+          "name": "source_subreddit",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source_url": {
+          "name": "source_url",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -235,6 +258,27 @@
             }
           ],
           "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "images_source_source_ref_unique": {
+          "name": "images_source_source_ref_unique",
+          "columns": [
+            {
+              "expression": "source",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "source_ref",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -342,8 +386,12 @@
           "name": "tag_jobs_image_id_images_id_fk",
           "tableFrom": "tag_jobs",
           "tableTo": "images",
-          "columnsFrom": ["image_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "image_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -407,12 +455,21 @@
     "public.image_status": {
       "name": "image_status",
       "schema": "public",
-      "values": ["pending", "indexed", "failed"]
+      "values": [
+        "pending",
+        "indexed",
+        "failed"
+      ]
     },
     "public.tag_job_status": {
       "name": "tag_job_status",
       "schema": "public",
-      "values": ["queued", "running", "done", "failed"]
+      "values": [
+        "queued",
+        "running",
+        "done",
+        "failed"
+      ]
     }
   },
   "schemas": {},
