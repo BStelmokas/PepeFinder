@@ -124,7 +124,7 @@ export default async function SearchPage(props: {
         <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
           <p className="text-sm text-gray-700">
             {results.length} result{results.length === 1 ? "" : "s"} (ranked by
-            distinct tag overlap)
+            tag overlap)
           </p>
         </div>
 
