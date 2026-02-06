@@ -27,7 +27,8 @@ export default function HomePage() {
         </h1>
         {/* A small subtitle explains the value prop without adding UI complexity. */}
         <p className="mt-3 text-center text-sm text-gray-600"></p>
-        Search a corpus of Pepe images using visual keywords.
+        Search for Pepe images using visual keywords. No more googling in
+        despair. Just describe what you see.
         {/* GET form -> /search?q=... (URL is the contract). */}
         <form
           action="/search"
@@ -48,7 +49,7 @@ export default function HomePage() {
               id="q"
               name="q"
               type="text"
-              placeholder="e.g. pepe red cap happy smiling ice cream..."
+              placeholder="e.g. pepe ice cream red cap smiling beach..."
               className="flex-1 rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 shadow-sm outline-none placeholder:text-gray-400 focus:border-gray-300"
               // Defaulting autoComplete off keeps weird browser suggestions from dominating the MVP UI.
               autoComplete="off"
@@ -70,7 +71,7 @@ export default function HomePage() {
               Emotion | Object | Action | Event | Person | Color | Setting |
               Style
             </span>{" "}
-            that you visualize appearing in the image
+            you're looking for
           </p>
         </form>
       </div>
