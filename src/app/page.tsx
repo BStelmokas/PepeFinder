@@ -26,9 +26,10 @@ export default function HomePage() {
           PepeFinder
         </h1>
         {/* A small subtitle explains the value prop without adding UI complexity. */}
-        <p className="mt-3 text-center text-sm text-gray-600"></p>
-        Search for Pepe images using visual keywords. No more googling in
-        despair. Just describe what you see.
+        <p className="mt-3 text-center text-sm text-gray-600">
+          Search for Pepe images using visual keywords. No more googling in
+          despair. Just describe what you see.
+        </p>
         {/* GET form -> /search?q=... (URL is the contract). */}
         <form
           action="/search"
