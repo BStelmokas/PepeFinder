@@ -71,7 +71,7 @@ export default function HomePage() {
               Emotion | Object | Action | Event | Person | Color | Setting |
               Style
             </span>{" "}
-            you&apos;'re looking for
+            you&apos;re looking for
           </p>
         </form>
       </div>
