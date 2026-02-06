@@ -27,7 +27,7 @@ export default function HomePage() {
         </h1>
         {/* A small subtitle explains the value prop without adding UI complexity. */}
         <p className="mt-3 text-center text-sm text-gray-600"></p>
-        Search a private corpus of Pepe images using deterministic tag overlap.
+        Search a corpus of Pepe images using visual keywords.
         {/* GET form -> /search?q=... (URL is the contract). */}
         <form
           action="/search"
@@ -65,7 +65,12 @@ export default function HomePage() {
 
           {/* Hint text: reinforces the frozen semantics gently. */}
           <p className="mt-3 text-xs text-gray-500">
-            Whitespace split, ASCII lowercase, deterministic ranking.
+            Describe every{" "}
+            <span className="font-medium text-gray-900">
+              Emotion | Object | Action | Event | Person | Color | Setting |
+              Style
+            </span>{" "}
+            that you visualize appearing in the image
           </p>
         </form>
       </div>
