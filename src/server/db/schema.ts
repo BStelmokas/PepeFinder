@@ -115,6 +115,17 @@ export const images = pgTable(
       .$onUpdate(() => new Date()),
 
     /**
+     * STEP 12 CHANGE:
+     * Persist the model-generated caption.
+     *
+     * - Nullable because MVP0 seed images may not have captions.
+     * - Not used for ranking directly (ranking is tag-overlap).
+     * - We will tokenize this caption into tags during worker processing
+     *   so it becomes searchable without changing search semantics.
+     */
+    caption: text("caption"),
+
+    /**
      * Optional attribution fields (kept minimal by design).
      *
      * Why include anything now?
@@ -132,7 +143,6 @@ export const images = pgTable(
      * - subreddit gives you traceability for content provenance
      * - post URL gives you an easy takedown/audit trail
      */
-    sourceSubreddit: varchar("source_subreddit", { length: 64 }),
     sourceUrl: text("source_url"),
   },
   (t) => {

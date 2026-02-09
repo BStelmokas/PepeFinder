@@ -27,9 +27,10 @@ import { sql } from "drizzle-orm";
 import { db } from "~/server/db";
 import { env } from "~/env";
 import { imageTags, images, tagJobs, tags } from "~/server/db/schema";
-import { normalizeTagName } from "~/lib/text/normalize";
+import { normalizeTagName, tokenizeQuery } from "~/lib/text/normalize";
 import { tagImageWithOpenAI } from "~/server/ai/openai-vision-tagger";
 import { resolveImageUrlForModel } from "~/server/storage/resolve-image-url";
+import type { Tag } from "@aws-sdk/client-s3";
 
 /**
  * Small sleep helper so we can “poll” the DB without busy-waiting.
@@ -204,6 +205,61 @@ async function writeTagsForImage(args: {
 }
 
 /**
+ * STEP 12/Option A CHANGE:
+ * Convert a caption string into tag suggestions using frozen tokenization rules.
+ *
+ * Why:
+ * - Lets users search by remembered meme “name” / phrase
+ * - Without changing search semantics or ranking rules (still tag overlap)
+ *
+ * Important:
+ * - We deliberately assign a low confidence because:
+ *   - confidence is display-only
+ *   - and caption tokens are “weak signals” compared to model tags
+ * - BUT search ranking ignores confidence, so even low confidence tokens are searchable.
+ */
+function captionToTagSuggestions(caption: string): TagSuggestion[] {
+  const tokens = tokenizeQuery(caption); // uses frozen rules: whitespace split, lowercase ASCII, trim/collapse
+  const seen = new Set<string>();
+
+  const out: TagSuggestion[] = [];
+
+  for (const tok of tokens) {
+    if (seen.has(tok)) continue;
+    seen.add(tok);
+
+    // Reasonable confidence considering the previous runs
+    out.push({ name: tok, confidence: 0.7 });
+  }
+
+  return out;
+}
+
+/**
+ * STEP 12/Option A CHANGE:
+ * Merge two suggestion lists by name, keeping the highest confidence.
+ * This prevents duplicated tag names and preserves the “best” confidence signal.
+ */
+function mergeSuggestions(
+  a: TagSuggestion[],
+  b: TagSuggestion[],
+): TagSuggestion[] {
+  const byName = new Map<string, TagSuggestion>();
+
+  for (const s of [...a, ...b]) {
+    const key = normalizeTagName(s.name);
+    if (!key) continue;
+
+    const prev = byName.get(key);
+    if (!prev || s.confidence > prev.confidence) {
+      byName.set(key, { name: key, confidence: s.confidence });
+    }
+  }
+
+  return Array.from(byName.values());
+}
+
+/**
  * Process one job (happy path + fail-closed).
  */
 async function processJob(args: {
@@ -247,18 +303,31 @@ async function processJob(args: {
     // Call the real model tagger (adapter enforces strict timeout + JSON parsing).
     const result = await tagImageWithOpenAI({ imageUrl });
 
-    // We ignore caption for now (MVP1 scope), but logging it can be helpful for debugging.
+    // Logging the caption can be helpful for debugging.
     console.log(`caption(image_id=${image.id}): ${result.caption}`);
+
+    // STEP 12/Option A CHANGE: store caption on the image row (Option A).
+    // We do this early so even if tag writes fail, you still have the caption for debugging.
+    await db
+      .update(images)
+      .set({ caption: result.caption })
+      .where(sql`${images.id} = ${image.id}`);
 
     // Convert ModelTag (with kind) -> persistence tags.
     // We intentionally ignore `kind` for MVP1, but you could later store it if desired.
-    const suggestions: TagSuggestion[] = result.tags.map((t) => ({
+    const modelSuggestions: TagSuggestion[] = result.tags.map((t) => ({
       name: t.name,
       confidence: t.confidence,
     }));
 
+    // STEP 12/Option A CHANGE: caption tokens -> tags (searchable caption).
+    const captionSuggestions = captionToTagSuggestions(result.caption);
+
+    // STEP 12/Option A CHANGE: merge and dedupe by tag name.
+    const merged = mergeSuggestions(modelSuggestions, captionSuggestions);
+
     // Write tags + join rows atomically.
-    await writeTagsForImage({ imageId: image.id, suggestions });
+    await writeTagsForImage({ imageId: image.id, suggestions: merged });
 
     // Mark image searchable and mark job done.
     await db.transaction(async (tx) => {

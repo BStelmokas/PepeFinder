@@ -104,6 +104,14 @@ export const searchRouter = createTRPCRouter({
           storageKey: images.storageKey,
           createdAt: images.createdAt,
 
+          // STEP 12/Option A CHANGE:
+          // Include caption so the search UI can render a “meme name” per result.
+          //
+          // Why it must be selected here:
+          // - tRPC output types are inferred from what the procedure returns.
+          // - If we don't select caption, TS correctly says `r.caption` doesn't exist.
+          caption: images.caption,
+
           // The computed rank signal (match_count).
           matchCount: matchCountExpr.as("match_count"),
         })
@@ -125,7 +133,13 @@ export const searchRouter = createTRPCRouter({
         )
         .groupBy(
           // Group by image identity so we can aggregate match_count per image.
+          // STEP 12/Option A CHANGE:
+          // Because we selected `images.caption`, Postgres requires it to be in GROUP BY too
+          // (since it is not an aggregate like COUNT()).
           images.id,
+          images.caption,
+          images.storageKey,
+          images.createdAt,
         )
         .having(
           // “Eligible if it has at least one distinct query token as a tag”.

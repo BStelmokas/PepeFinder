@@ -60,6 +60,7 @@ export const imageRouter = createTRPCRouter({
           updatedAt: images.updatedAt,
           source: images.source,
           sourceRef: images.sourceRef,
+          caption: images.caption,
         })
         .from(images)
         .where(eq(images.id, input.id))

@@ -150,7 +150,9 @@ export default async function SearchPage(props: {
               {/* Metadata */}
               <div className="p-3">
                 <div className="flex items-center justify-between">
-                  <p className="text-sm font-medium text-gray-900">#{r.id}</p>
+                  <p className="text-sm font-medium text-gray-900">
+                    {r.caption}
+                  </p>
                   <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-700">
                     match {r.matchCount}
                   </span>

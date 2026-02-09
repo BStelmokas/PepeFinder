@@ -351,7 +351,6 @@ async function main(): Promise<void> {
           // We do NOT have post_id from i.redd.it URL alone.
           // We keep sourceRef null and store the raw URL in sourceUrl.
           sourceRef: null,
-          sourceSubreddit: null,
           sourceUrl: url,
         })
         .returning({ id: images.id });

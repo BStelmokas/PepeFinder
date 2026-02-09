@@ -8,7 +8,6 @@
  * - Insert images row with minimal attribution:
  *   - source="reddit"
  *   - sourceRef=post_id
- *   - sourceSubreddit=subreddit
  *   - sourceUrl=canonical post URL
  * - Enqueue tag_jobs idempotently (unique(image_id))
  * - Respect cost safety knobs:
@@ -292,7 +291,6 @@ async function main(): Promise<void> {
           status: "pending",
           source: "reddit",
           sourceRef: post.id,
-          sourceSubreddit: post.subreddit,
           sourceUrl: postUrl,
         })
         .returning({ id: images.id });

@@ -66,7 +66,6 @@ async function main(): Promise<void> {
       storageKey: images.storageKey,
       sha256: images.sha256,
       sourceUrl: images.sourceUrl,
-      sourceSubreddit: images.sourceSubreddit,
     })
     .from(images)
     .where(sql`${images.source} = 'reddit' AND ${images.sourceRef} = ${postId}`)
@@ -79,7 +78,7 @@ async function main(): Promise<void> {
   }
 
   console.log(
-    `Found image_id=${img.id} sha256=${img.sha256} subreddit=${img.sourceSubreddit ?? "?"} url=${img.sourceUrl ?? "?"}`,
+    `Found image_id=${img.id} sha256=${img.sha256} url=${img.sourceUrl ?? "?"}`,
   );
 
   // Best-effort S3 delete.
