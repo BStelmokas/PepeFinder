@@ -28,7 +28,7 @@ export default function HomePage() {
         {/* A small subtitle explains the value prop without adding UI complexity. */}
         <div className="mt-3 space-y-1 text-center text-sm text-gray-600">
           <p>No more googling in despair.</p>
-          <p>Search Pepe images by describing what you see.</p>
+          <p>Find your Pepe by describing the image.</p>
         </div>
         {/* GET form -> /search?q=... (URL is the contract). */}
         <form
