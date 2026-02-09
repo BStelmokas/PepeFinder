@@ -139,7 +139,7 @@ export const uploadRouter = createTRPCRouter({
       }
 
       // Normalize sha to lowercase hex for storage consistency.
-      const sha256 = input.sha256.toLocaleLowerCase();
+      const sha256 = input.sha256.toLowerCase();
 
       // 3) Dedupe: if image already exists by sha256, reuse it.
       const existing = await db

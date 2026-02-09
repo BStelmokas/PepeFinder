@@ -26,7 +26,7 @@
 
 export const instruction = [
   // --- Role + goal (keeps the model “aimed” at the right job) ---
-  "You are tagging a Pepe meme image for a private search engine.",
+  "You are tagging a Pepe / Apustaja meme image for a private search engine.",
   "Your output will be used for deterministic tag-overlap search (no stemming/synonyms).",
   "Be accurate. Do not guess. If unsure, omit the tag.",
 
@@ -69,13 +69,15 @@ export const instruction = [
 
   // --- Coverage goals (not hallucination requirements) ---
   "coverage goals (only when confidently detectable):",
-  "- emotion: include 2–4 mood/state tags describing the frog’s expression or vibe.",
+  "- emotion: include 6–8 mood/state tags describing the frog’s expression, emotion, state, mood, or vibe.",
   "- object: include key objects (props, clothing, items).",
   "- action: include clear actions (e.g., holding, pointing, crying, shooting).",
   "- event: include a one-word event only if strongly implied (party, fight, meeting, etc.).",
   "- person: include the main character(s) (pepe, apustaja) and any obvious others (human, homer, penguin, etc.).",
   "- color: include simple color tags (red, blue, green, brown, black, white, yellow, pink, purple, orange, gray) only when clearly visible.",
   '- For color tags, prefer pairing with the corresponding object also being present in tags (e.g., include both "brown" and "chair" if a brown chair is clearly visible).',
+  "- Consider that there is a difference between Pepe and Apustaja.",
+  `- If the image contains text, add tags "text" and / or "greentext".`,
 
   // --- Important: do NOT try to satisfy stemming/tense requirements in prompt ---
   "Important:",

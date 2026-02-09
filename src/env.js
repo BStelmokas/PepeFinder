@@ -113,6 +113,12 @@ export const env = createEnv({
       .max(100)
       .optional()
       .default(25),
+
+    // STEP 13 CHANGE: optional folder path containing your pre-scraped JSON files.
+    // Why optional:
+    // - keeps env validation from blocking dev if you don’t use the script
+    // - allows passing the folder as a CLI argument instead
+    REDDIT_SCRAPE_DIR: z.string().min(1).optional(),
   },
 
   /**
@@ -156,6 +162,8 @@ export const env = createEnv({
     REDDIT_SUBREDDIT: process.env.REDDIT_SUBREDDIT,
     REDDIT_SORT: process.env.REDDIT_SORT,
     REDDIT_LIMIT: process.env.REDDIT_LIMIT,
+
+    REDDIT_SCRAPE_DIR: process.env.REDDIT_SCRAPE_DIR,
   },
   /**
    * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially
