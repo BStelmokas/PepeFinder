@@ -30,7 +30,6 @@ import { imageTags, images, tagJobs, tags } from "~/server/db/schema";
 import { normalizeTagName, tokenizeQuery } from "~/lib/text/normalize";
 import { tagImageWithOpenAI } from "~/server/ai/openai-vision-tagger";
 import { resolveImageUrlForModel } from "~/server/storage/resolve-image-url";
-import type { Tag } from "@aws-sdk/client-s3";
 
 /**
  * Small sleep helper so we can “poll” the DB without busy-waiting.

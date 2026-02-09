@@ -185,7 +185,7 @@ export const searchRouter = createTRPCRouter({
               // This uses the centralized resolver so we do not duplicate storage policy.
               renderUrl: await resolveImageUrlForBrowser(r.storageKey),
             };
-          } catch (err) {
+          } catch {
             // Fail-soft: do not break search if URL resolution fails.
             // The UI will likely fail to load the image, but the page still renders.
             return {

@@ -119,9 +119,7 @@ export function stripPunctuationPreserveInnerHyphens(input: string): string {
   // - Replace everything else with a space so it becomes a token boundary.
   let kept = "";
 
-  for (let i = 0; i < input.length; i++) {
-    const ch = input[i]!;
-
+  for (const ch of input) {
     const isAZ = ch >= "a" && ch <= "z";
     const is09 = ch >= "0" && ch <= "9";
     const isSpace = ch === " ";
