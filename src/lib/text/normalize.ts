@@ -96,6 +96,84 @@ export function stripNonAscii(input: string): string {
 }
 
 /**
+ * STEP CHANGE: Strip punctuation (replace with spaces) while preserving meaningful hyphens.
+ *
+ * What “punctuation trimming” means in practice:
+ * - "sad!"      -> "sad"
+ * - "nose,"     -> "nose"
+ * - "(angry)"   -> "angry"
+ * - "sad,angry" -> "sad angry"  (IMPORTANT: do NOT concatenate into "sadangry")
+ * - "film-noir" -> "film-noir"  (keep hyphen when it's an inner connector)
+ *
+ * Why we replace punctuation with spaces (instead of removing it):
+ * - Removing punctuation outright can merge adjacent words:
+ *   "sad,angry" would become "sadangry", which is worse than two tokens.
+ *
+ * Hyphen rule:
+ * - Keep "-" only when it connects two alphanumeric characters (a-z, 0-9).
+ * - This prevents tokens like "-" or "--sad--" from leaking through.
+ */
+export function stripPunctuationPreserveInnerHyphens(input: string): string {
+  // First pass:
+  // - Keep lowercase letters a-z, digits 0-9, spaces, and hyphens.
+  // - Replace everything else with a space so it becomes a token boundary.
+  let kept = "";
+
+  for (let i = 0; i < input.length; i++) {
+    const ch = input[i]!;
+
+    const isAZ = ch >= "a" && ch <= "z";
+    const is09 = ch >= "0" && ch <= "9";
+    const isSpace = ch === " ";
+    const isHyphen = ch === "-";
+
+    if (isAZ || is09 || isSpace || isHyphen) {
+      kept += ch;
+    } else {
+      // Punctuation becomes a space to avoid accidental word concatenation.
+      kept += " ";
+    }
+  }
+
+  // Second pass:
+  // Remove hyphens that are not strictly between alphanumeric characters.
+  // Examples:
+  // - "-sad"     -> " sad"
+  // - "sad-"     -> "sad "
+  // - "--sad--"  -> "  sad  "
+  // - "film-noir" stays "film-noir"
+  let out = "";
+
+  for (let i = 0; i < kept.length; i++) {
+    const ch = kept[i]!;
+    if (ch !== "-") {
+      out += ch;
+      continue;
+    }
+
+    const prev = kept[i - 1];
+    const next = kept[i + 1];
+
+    const prevIsAlnum =
+      (prev !== undefined && prev >= "a" && prev <= "z") ||
+      (prev !== undefined && prev >= "0" && prev <= "9");
+
+    const nextIsAlnum =
+      (next !== undefined && next >= "a" && next <= "z") ||
+      (next !== undefined && next >= "0" && next <= "9");
+
+    if (prevIsAlnum && nextIsAlnum) {
+      out += "-";
+    } else {
+      // If the hyphen isn't a connector, treat it like punctuation → becomes a space boundary.
+      out += " ";
+    }
+  }
+
+  return out;
+}
+
+/**
  * Normalize a raw user query string into the normalized query form.
  *
  * This is primarily useful for:
@@ -115,9 +193,16 @@ export function normalizeQueryString(rawQuery: string): string {
   const lower = lowercaseAsciiOnly(spaced);
   const ascii = stripNonAscii(lower);
 
+  // STEP CHANGE:
+  // Step 2.5: strip punctuation in a deterministic way that matches how tags should be stored.
+  // This ensures:
+  // - user queries like "sad!" match stored tags "sad"
+  // - we don't create weird tokens like "sadangry" from "sad,angry"
+  const noPunct = stripPunctuationPreserveInnerHyphens(ascii);
+
   // Step 3: whitespace may have been affected by stripping characters,
   // so we normalize whitespace *again* to keep the invariant stable.
-  return normalizeWhitespace(ascii);
+  return normalizeWhitespace(noPunct);
 }
 
 /**

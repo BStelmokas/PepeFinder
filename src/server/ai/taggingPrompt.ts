@@ -78,6 +78,7 @@ export const instruction = [
   '- For color tags, prefer pairing with the corresponding object also being present in tags (e.g., include both "brown" and "chair" if a brown chair is clearly visible).',
   "- Consider that there is a difference between Pepe and Apustaja.",
   `- If the image contains text, add tags "text" and / or "greentext".`,
+  `- Any text that the image contains, must included in the tags (transcribed into them), as much as possible.`,
 
   // --- Important: do NOT try to satisfy stemming/tense requirements in prompt ---
   "Important:",

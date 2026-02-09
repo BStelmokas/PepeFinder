@@ -50,7 +50,7 @@ export default function HomePage() {
               id="q"
               name="q"
               type="text"
-              placeholder="e.g. pepe ice cream red cap smiling beach..."
+              placeholder="e.g. ice cream red cap smiling beach..."
               className="flex-1 rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 shadow-sm outline-none placeholder:text-gray-400 focus:border-gray-300"
               // Defaulting autoComplete off keeps weird browser suggestions from dominating the MVP UI.
               autoComplete="off"
@@ -67,7 +67,7 @@ export default function HomePage() {
 
           {/* Hint text: reinforces the frozen semantics gently. */}
           <p className="mt-3 text-xs text-gray-500">
-            Person | Object | Color | Action | Emotion | Setting | Event
+            Object | Color | Action | Emotion | Setting | Event
           </p>
         </form>
       </div>

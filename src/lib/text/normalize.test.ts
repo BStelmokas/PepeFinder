@@ -92,3 +92,37 @@ describe("normalizeTagName", () => {
     expect(normalizeTagName("  sad   pepe  ")).toBeNull();
   });
 });
+
+describe("punctuation stripping (preserve inner hyphens)", () => {
+  it("trims punctuation in queries so tags can match", () => {
+    expect(tokenizeQuery("nose, sad!")).toEqual(["nose", "sad"]);
+  });
+
+  it("does not merge words when punctuation is between them", () => {
+    expect(tokenizeQuery("sad,angry")).toEqual(["sad", "angry"]);
+  });
+
+  it("does not merge words when punctuation is between them", () => {
+    expect(tokenizeQuery("it, was! a (film-noir)")).toEqual([
+      "it",
+      "was",
+      "a",
+      "film-noir",
+    ]);
+    expect(normalizeTagName("film-noir")).toBe("film-noir");
+  });
+
+  it("removes non-connector hyphens", () => {
+    expect(tokenizeQuery("--sad--")).toEqual(["sad"]);
+    expect(tokenizeQuery("-sad sad-")).toEqual(["sad"]);
+  });
+
+  it("still enforces tag single-token rule after punctuation stripping", () => {
+    expect(normalizeTagName("sad!")).toBe("sad");
+    expect(normalizeTagName("sad, angry")).toBeNull(); // becomes "sad angry" → not a single token
+  });
+
+  it("normalizeQueryString stays deterministic and whitespace-normalized", () => {
+    expect(normalizeQueryString("  (SAD!)   frog\t\n")).toBe("sad frog");
+  });
+});
