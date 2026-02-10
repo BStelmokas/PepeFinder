@@ -134,9 +134,21 @@ export default async function ImageDetailPage(props: unknown) {
             ← Home
           </Link>
 
-          <span className="rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-700">
-            status: {image.status}
-          </span>
+          {/* STEP CHANGE:
+              Replace the redundant "status: indexed" pill with an Upload button.
+              Keep the status pill for pending/failed, because those are meaningful states. */}
+          {image.status === "indexed" ? (
+            <Link
+              href="/upload"
+              className="rounded-xl bg-gray-900 px-5 py-1.5 text-center text-sm font-medium text-white shadow-sm hover:bg-gray-800"
+            >
+              Upload
+            </Link>
+          ) : (
+            <span className="rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-700">
+              status: {image.status}
+            </span>
+          )}
         </div>
 
         {/* Main content: image + tag sidebar */}
