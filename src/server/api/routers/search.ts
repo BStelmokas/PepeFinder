@@ -41,6 +41,24 @@ export const searchRouter = createTRPCRouter({
         // Keep the input shape tiny and explicit.
         // We validate at the boundary so the rest of the system can trust types.
         q: z.string(),
+
+        // STEP 14 CHANGE (pagination):
+        // The page size. We cap it to prevent accidental “return 10k rows” requests.
+        // This is NOT a "budget protection"; it’s a normal API sanity guard.
+        limit: z.number().int().min(1).max(100).optional().default(50),
+
+        /**
+         * STEP 14 BUGFIX (RSC serialization):
+         * Cursor must be JSON-serializable. Dates in nested objects can break RSC streaming.
+         * So we use createdAtMs (number) instead of createdAt: Date.
+         */
+        cursor: z
+          .object({
+            matchCount: z.number().int().min(1),
+            createdAtMs: z.number().int().nonnegative(),
+            id: z.number().int().positive(),
+          })
+          .optional(),
       }),
     )
     .query(async ({ ctx, input }) => {
@@ -58,8 +76,9 @@ export const searchRouter = createTRPCRouter({
       const tokens = tokenizeQuery(input.q);
 
       // If the query has no usable tokens after normalization, the correct result is “no matches”.
-      // Returning [] is cheap and avoids sending a weird “match everything” query to the DB.
-      if (tokens.length === 0) return [];
+      if (tokens.length === 0) {
+        return { items: [], nextCursor: null, totalCount: 0 };
+      }
 
       /**
        * Step 2: map tokens -> tag IDs.
@@ -79,7 +98,9 @@ export const searchRouter = createTRPCRouter({
       const tagIds = matchingTagRows.map((r) => r.id);
 
       // If none of the tokens exist in our tags table, nothing can match.
-      if (tagIds.length === 0) return [];
+      if (tagIds.length === 0) {
+        return { items: [], nextCursor: null, totalCount: 0 };
+      }
 
       /**
        * Step 3: build the DB-only search query.
@@ -96,6 +117,97 @@ export const searchRouter = createTRPCRouter({
        *   DISTINCT still protects the ranking semantics.
        */
       const matchCountExpr = sql<number>`count(distinct ${imageTags.tagId})`;
+
+      /**
+       * STEP 14 CHANGE (pagination):
+       * We fetch "limit + 1" rows so we can tell whether there is another page.
+       * - If we got > limit rows, we return the first `limit` and emit nextCursor.
+       * - If we got <= limit rows, nextCursor is null.
+       */
+      const limitPlusOne = input.limit + 1;
+
+      /**
+       * STEP 14 FIX (pagination):
+       * Use a single tuple comparison that exactly matches ORDER BY.
+       *
+       * Why this is more reliable than a hand-written OR-chain:
+       * - It mirrors the ordering tuple precisely: (matchCount, createdAt, id)
+       * - It is much harder to get subtly wrong
+       * - It avoids equality/precedence mistakes in nested OR logic
+       *
+       * For ORDER BY (matchCount DESC, createdAt DESC, id DESC),
+       * "next page" means "strictly smaller ordering tuple":
+       *   (matchCount, createdAt, id) < (cursor.matchCount, cursor.createdAt, cursor.id)
+       *
+       * IMPORTANT:
+       * - This MUST be used in HAVING because matchCountExpr is an aggregate.
+       */
+      /**
+       * STEP 14 CRITICAL BUGFIX:
+       * DO NOT pass a JS Date into SQL parameters.
+       *
+       * We convert the cursor ms -> Postgres timestamp in SQL:
+       *   to_timestamp(ms / 1000.0)
+       *
+       * This keeps the cursor boundary:
+       *   (matchCount, createdAt, id) < (cursorMatchCount, cursorCreatedAt, cursorId)
+       * for the DESC order keys.
+       */
+      const cursorHaving = input.cursor
+        ? sql`(
+          (${matchCountExpr}, ${images.createdAt}, ${images.id}) < (${input.cursor.matchCount}, to_timestamp(${input.cursor.createdAtMs} / 1000.0), ${input.cursor.id})
+        )`
+        : undefined;
+
+      /**
+       * STEP 14 CHANGE (total count):
+       * Compute the total number of *eligible images* for this query.
+       *
+       * Why do it this way:
+       * - Avoids `sql.array(...)` (not available in your Drizzle build).
+       * - Uses the same query builder primitives you already use (inArray, groupBy, having).
+       * - Stays perfectly consistent with eligibility semantics.
+       */
+
+      // A subquery that returns ONE ROW PER eligible image_id.
+      // We only select the image id (no heavy columns) to keep it cheap.
+      const eligibleImagesSubquery = ctx.db
+        .select({
+          // Only select the id: we want a cheap "set of eligible images".
+          id: images.id,
+        })
+        .from(images)
+        .innerJoin(
+          imageTags,
+          // Join images -> image_tags via image_id.
+          eq(imageTags.imageId, images.id),
+        )
+        .where(
+          and(eq(images.status, "indexed"), inArray(imageTags.tagId, tagIds)),
+        )
+        .groupBy(
+          // Group by image id so we get one row per image.
+          images.id,
+        )
+        .having(
+          // Same eligibility rule: has at least one distinct matching token.
+          sql`${matchCountExpr} >= 1`,
+        )
+        .as("eligible_images");
+
+      const totalCountRow = await ctx.db
+        .select({
+          // Count how many eligible image IDs exist.
+          n: sql<number>`count(*)`.as("n"),
+        })
+        .from(eligibleImagesSubquery);
+
+      /**
+       * STEP 14 BUGFIX:
+       * COUNT(*) may come back as a string at runtime depending on the driver.
+       * We coerce to number so the UI and cursor encoding are stable and predictable.
+       */
+      const totalCount = Number(totalCountRow[0]?.n ?? 0);
 
       const results = await ctx.db
         .select({
@@ -144,7 +256,9 @@ export const searchRouter = createTRPCRouter({
         .having(
           // “Eligible if it has at least one distinct query token as a tag”.
           // With our WHERE filter, COUNT >= 1 is the eligibility rule.
-          sql`${matchCountExpr} >= 1`,
+          cursorHaving
+            ? sql`${matchCountExpr} >= 1 AND ${cursorHaving}`
+            : sql`${matchCountExpr} >= 1`,
         )
         .orderBy(
           // Primary rank: match_count DESC.
@@ -156,11 +270,16 @@ export const searchRouter = createTRPCRouter({
           // Tie-breaker #2: stable deterministic ordering even if timestamps collide.
           desc(images.id),
         )
-        .limit(
-          // MVP safeguard: avoid returning unbounded rows by default.
-          // You can evolve this into cursor pagination later.
-          200,
-        );
+        .limit(limitPlusOne);
+
+      /**
+       * STEP 14 CHANGE (pagination):
+       * Split results into:
+       * - page items (first `input.limit`)
+       * - overflow (if present) to determine nextCursor
+       */
+      const pageRows = results.slice(0, input.limit);
+      const hasMore = results.length > input.limit;
 
       /**
        * We now attach `renderUrl` for each result row.
@@ -175,11 +294,21 @@ export const searchRouter = createTRPCRouter({
        * - We catch resolver errors per row and fall back to storageKey
        *   so search doesn’t fail if one row is weird.
        */
-      const resultsWithRenderUrl = await Promise.all(
-        results.map(async (r) => {
+      const items = await Promise.all(
+        pageRows.map(async (r) => {
+          /**
+           * STEP 14 BUGFIX:
+           * matchCount (COUNT DISTINCT) can arrive as a string at runtime.
+           * We normalize it here so:
+           * - rendering is correct
+           * - cursor encoding uses numbers (not "1")
+           * - downstream code doesn't have to guess
+           */
+          const matchCount = Number(r.matchCount);
           try {
             return {
               ...r,
+              matchCount, // overwrite with normalized number
 
               // Derived field used by the UI for thumbnails.
               // This uses the centralized resolver so we do not duplicate storage policy.
@@ -190,13 +319,34 @@ export const searchRouter = createTRPCRouter({
             // The UI will likely fail to load the image, but the page still renders.
             return {
               ...r,
+              matchCount, // overwrite with normalized number
               renderUrl: r.storageKey, // Best-effort fallback.
             };
           }
         }),
       );
 
-      // Return the enhanced results.
-      return resultsWithRenderUrl;
+      /**
+       * STEP 14 CHANGE (pagination):
+       * The next cursor is the last item of the current page,
+       * because that defines the boundary for “rows after this” on the next call.
+       */
+      const last = items[items.length - 1];
+
+      /**
+       * STEP 14 BUGFIX (RSC serialization):
+       * nextCursor contains only JSON primitives.
+       */
+      const nextCursor =
+        hasMore && last
+          ? {
+              // STEP 14 BUGFIX: ensure number, not string.
+              matchCount: Number(last.matchCount),
+              createdAtMs: last.createdAt.getTime(),
+              id: last.id,
+            }
+          : null;
+
+      return { items, nextCursor, totalCount };
     }),
 });

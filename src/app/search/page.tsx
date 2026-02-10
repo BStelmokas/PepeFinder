@@ -22,6 +22,7 @@ import Link from "next/link"; // Next Link gives fast client navigation while st
 import { headers } from "next/headers"; // Provides request headers (we’ll use it for creating the tRPC context).
 import { createCaller } from "~/server/api/root"; // Typed server-side tRPC caller factory.
 import { createTRPCContext } from "~/server/api/trpc"; // Context builder used by tRPC middleware (even in server calls).
+import { match } from "assert";
 
 /**
  * The shape Next provides for the resolved search params object.
@@ -31,6 +32,106 @@ import { createTRPCContext } from "~/server/api/trpc"; // Context builder used b
  * - We want deterministic parsing logic for q.
  */
 type ResolvedSearchParams = Record<string, string | string[] | undefined>;
+
+/**
+ * STEP 14 CHANGE (pagination):
+ * Cursor is encoded in the URL as a base64url JSON string.
+ *
+ * Why base64url JSON:
+ * - deterministic
+ * - compact enough
+ * - no new dependencies
+ * - safe to transport in query string
+ */
+type SearchCursorUrlShape = {
+  matchCount: number | string;
+  createdAtMs: number | string; // ISO string in URL payload
+  id: number | string;
+};
+
+function encodeCursor(cursor: {
+  matchCount: number;
+  createdAtMs: number;
+  id: number;
+}): string {
+  // base64url avoids "+" and "/" which are annoying in URLs.
+  return Buffer.from(JSON.stringify(cursor), "utf8").toString("base64url");
+}
+
+function decodeCursor(
+  raw: string | undefined,
+): { matchCount: number; createdAtMs: number; id: number } | undefined {
+  if (!raw) return undefined;
+
+  try {
+    const json = Buffer.from(raw, "base64url").toString("utf8");
+    const parsed = JSON.parse(json) as Partial<SearchCursorUrlShape>;
+
+    /**
+     * STEP 14 BUGFIX:
+     * The cursor payload may contain numeric fields encoded as strings,
+     * because matchCount comes from SQL COUNT() and can be string at runtime.
+     *
+     * So we coerce aggressively but safely.
+     */
+    /**
+     * IMPORTANT:
+     * `parsed` is a Partial<...>, so fields may be missing (undefined).
+     * We coerce missing fields to NaN so we can validate with Number.isFinite.
+     */
+    const matchCountRaw = parsed.matchCount;
+    const createdAtMsRaw = parsed.createdAtMs;
+    const idRaw = parsed.id;
+
+    const matchCount =
+      typeof matchCountRaw === "string"
+        ? Number(matchCountRaw)
+        : typeof matchCountRaw === "number"
+          ? matchCountRaw
+          : Number.NaN;
+
+    const createdAtMs =
+      typeof createdAtMsRaw === "string"
+        ? Number(createdAtMsRaw)
+        : typeof createdAtMsRaw === "number"
+          ? createdAtMsRaw
+          : Number.NaN;
+
+    const id =
+      typeof idRaw === "string"
+        ? Number(idRaw)
+        : typeof idRaw === "number"
+          ? idRaw
+          : Number.NaN;
+
+    if (
+      !Number.isFinite(matchCount) ||
+      !Number.isFinite(createdAtMs) ||
+      Number.isNaN(id)
+    ) {
+      return undefined;
+    }
+
+    return { matchCount, createdAtMs, id };
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * STEP 14 UI CHANGE:
+ * Parse a numeric query param safely.
+ * We use this for `shown`, which tracks how many items have been shown *before* this page.
+ */
+function parseIntParam(
+  raw: string | string[] | undefined,
+  fallback: number,
+): number {
+  const s = Array.isArray(raw) ? raw[0] : raw;
+  if (!s) return fallback;
+  const n = Number.parseInt(s, 10);
+  return Number.isFinite(n) && n >= 0 ? n : fallback;
+}
 
 export default async function SearchPage(props: {
   searchParams?: Promise<ResolvedSearchParams>;
@@ -53,6 +154,21 @@ export default async function SearchPage(props: {
    */
   const rawQ = searchParams.q;
   const q = Array.isArray(rawQ) ? rawQ.join(" ") : (rawQ ?? "");
+
+  // STEP 14 CHANGE (pagination):
+  // Read "cursor" from URL, decode it into the typed cursor shape expected by tRPC (Date included).
+  const rawCursor = searchParams.cursor;
+  const cursorToken = Array.isArray(rawCursor) ? rawCursor[0] : rawCursor;
+  const cursor = decodeCursor(cursorToken);
+
+  /**
+   * STEP 14 UI CHANGE:
+   * `shown` tells us how many results were displayed BEFORE this page.
+   * - page 1: shown=0 (or omitted)
+   * - page 2: shown=50
+   * - page 3: shown=100
+   */
+  const shownBefore = parseIntParam(searchParams.shown, 0);
 
   /**
    * Step 2: Create a server-side tRPC caller.
@@ -86,6 +202,8 @@ export default async function SearchPage(props: {
    */
   type SearchImagesOutput = Awaited<ReturnType<typeof api.search.searchImages>>;
 
+  const pageSize = 50;
+
   /**
    * Step 3: Execute the search via tRPC.
    *
@@ -95,7 +213,28 @@ export default async function SearchPage(props: {
    * - createdAt
    * - matchCount
    */
-  const results: SearchImagesOutput = await api.search.searchImages({ q });
+  const results: SearchImagesOutput = await api.search.searchImages({
+    q,
+    limit: pageSize, // page size (tunable)
+    cursor,
+  });
+
+  // STEP 14 CHANGE (pagination):
+  // Encode nextCursor back into URL token form for the "Next" link.
+  const nextCursorToken = results.nextCursor
+    ? encodeCursor(results.nextCursor)
+    : null;
+
+  /**
+   * STEP 14 UI CHANGE:
+   * Cumulative “shown so far”:
+   * - You have shown `shownBefore` from previous pages
+   * - plus `results.items.length` on this page
+   *
+   * We also clamp at totalCount for nice display on the last page.
+   */
+  const shownSoFarRaw = shownBefore + results.items.length;
+  const shownSoFar = Math.min(shownSoFarRaw, results.totalCount);
 
   return (
     <main className="min-h-screen bg-white">
@@ -123,14 +262,18 @@ export default async function SearchPage(props: {
         {/* Result summary */}
         <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
           <p className="text-sm text-gray-700">
-            {results.length} result{results.length === 1 ? "" : "s"} (ranked by
-            tag overlap)
+            {results.totalCount} result{results.totalCount === 1 ? "" : "s"}{" "}
+            (ranked by tag overlap)
+          </p>
+
+          <p className="mt-1 text-xs text-gray-500">
+            Showing {shownSoFar} of {results.totalCount}
           </p>
         </div>
 
         {/* Grid */}
         <div className="mt-6 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-          {results.map((r) => (
+          {results.items.map((r) => (
             <Link
               key={r.id}
               href={`/image/${r.id}`}
@@ -166,8 +309,22 @@ export default async function SearchPage(props: {
           ))}
         </div>
 
+        {/* STEP 14 CHANGE (pagination): pager */}
+        <div className="mt-8 flex items-center justify-end">
+          {nextCursorToken ? (
+            <Link
+              className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-900 shadow-sm hover:bg-gray-50"
+              href={`/search?q=${encodeURIComponent(q)}&cursor=${encodeURIComponent(nextCursorToken)}&shown=${encodeURIComponent(shownSoFar)}`}
+            >
+              Next →
+            </Link>
+          ) : (
+            <p className="text-sm text-gray-500">End of results</p>
+          )}
+        </div>
+
         {/* Empty state */}
-        {results.length === 0 && (
+        {results.items.length === 0 && (
           <div className="mt-10 rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-sm">
             <p className="text-sm text-gray-700">
               No matches. Try fewer words or different tags.

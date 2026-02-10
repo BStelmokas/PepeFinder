@@ -67,7 +67,7 @@ export default function HomePage() {
 
           {/* Hint text: reinforces the frozen semantics gently. */}
           <p className="mt-3 text-xs text-gray-500">
-            Object | Color | Action | Emotion | Setting | Event
+            Objects | Colors | Actions | Emotions | Settings | Events
           </p>
         </form>
       </div>
