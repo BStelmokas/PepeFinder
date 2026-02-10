@@ -68,8 +68,11 @@ export default async function ImageDetailPage(props: unknown) {
     return (
       <main className="min-h-screen bg-white">
         <div className="mx-auto max-w-4xl px-6 py-10">
-          <Link href="/" className="text-sm text-gray-700 hover:text-gray-900">
-            ← Home
+          <Link
+            href="/"
+            className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-center text-sm font-medium text-gray-900 shadow-sm hover:bg-gray-50"
+          >
+            ← Search
           </Link>
           <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
             <h1 className="text-lg font-semibold text-gray-900">
@@ -106,8 +109,11 @@ export default async function ImageDetailPage(props: unknown) {
     return (
       <main className="min-h-screen bg-white">
         <div className="mx-auto max-w-4xl px-6 py-10">
-          <Link href="/" className="text-sm text-gray-700 hover:text-gray-900">
-            ← Home
+          <Link
+            href="/"
+            className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-center text-sm font-medium text-gray-900 shadow-sm hover:bg-gray-50"
+          >
+            ← Search
           </Link>
           <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-8 shadow-sm">
             <h1 className="text-lg font-semibold text-gray-900">
@@ -130,8 +136,11 @@ export default async function ImageDetailPage(props: unknown) {
       <div className="mx-auto max-w-6xl px-6 py-10">
         {/* Top navigation */}
         <div className="flex items-center justify-between">
-          <Link href="/" className="text-sm text-gray-700 hover:text-gray-900">
-            ← Home
+          <Link
+            href="/"
+            className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-center text-sm font-medium text-gray-900 shadow-sm hover:bg-gray-50"
+          >
+            ← Search
           </Link>
 
           {/* STEP CHANGE:

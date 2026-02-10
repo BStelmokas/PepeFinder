@@ -245,7 +245,7 @@ export default async function SearchPage(props: {
             <h1 className="text-2xl font-semibold text-gray-900">
               Search results
             </h1>
-            <p className="mt-1 text-sm text-gray-600">
+            <p className="mt-5 text-sm text-gray-600">
               Query:{" "}
               <span className="font-medium text-gray-900">
                 {q.trim() === "" ? "(empty)" : q}
@@ -254,8 +254,11 @@ export default async function SearchPage(props: {
           </div>
 
           {/* Back to home for quick re-searching (keeps MVP flow obvious). */}
-          <Link href="/" className="text-sm text-gray-700 hover:text-gray-900">
-            ← New search
+          <Link
+            href="/"
+            className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-center text-sm font-medium text-gray-900 shadow-sm hover:bg-gray-50"
+          >
+            ← Search
           </Link>
         </div>
 
@@ -319,7 +322,7 @@ export default async function SearchPage(props: {
               Next →
             </Link>
           ) : (
-            <p className="text-sm text-gray-500">End of results</p>
+            ""
           )}
         </div>
 
