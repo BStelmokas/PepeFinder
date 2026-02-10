@@ -45,7 +45,7 @@ export const searchRouter = createTRPCRouter({
         // STEP 14 CHANGE (pagination):
         // The page size. We cap it to prevent accidental “return 10k rows” requests.
         // This is NOT a "budget protection"; it’s a normal API sanity guard.
-        limit: z.number().int().min(1).max(100).optional().default(50),
+        limit: z.number().int().min(1).max(100).optional().default(96),
 
         /**
          * STEP 14 BUGFIX (RSC serialization):

@@ -202,7 +202,7 @@ export default async function SearchPage(props: {
    */
   type SearchImagesOutput = Awaited<ReturnType<typeof api.search.searchImages>>;
 
-  const pageSize = 50;
+  const pageSize = 96;
 
   /**
    * Step 3: Execute the search via tRPC.
