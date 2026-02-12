@@ -32,27 +32,25 @@ export default function UploadPage() {
       <div className="mx-auto max-w-3xl px-6 py-10">
         {/* Local navigation keeps this page from feeling isolated. */}
         <div className="flex items-center justify-between">
-          <Link href="/" className="text-sm text-gray-700 hover:text-gray-900">
-            ← Home
-          </Link>
+          <div></div>
 
           <Link
-            href="/search?q=apustaja"
-            className="text-sm text-gray-700 hover:text-gray-900"
+            href="/"
+            className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-center text-sm font-medium text-gray-900 shadow-sm hover:bg-gray-50"
           >
-            Browse
+            ← Home
           </Link>
         </div>
 
-        <h1 className="mt-6 text-2xl font-semibold text-gray-900">Upload</h1>
-        <p className="mt-2 text-sm text-gray-600">
-          Upload an image. We store it immediately, then a background worker
-          will tag it. Search remains DB-only and model calls never happen on
-          the request path.
+        <h1 className="mt-4 text-2xl font-semibold text-gray-900">Upload</h1>
+        <p className="mt-6 text-sm text-gray-600">
+          Upload your own Pepe images to support this public corpus. Upon upload
+          an image has to await a worker to push it through a vision model, so
+          it may not appear in search immediately.
         </p>
 
         {/* Client-side uploader: isolated for correctness + minimal JS surface. */}
-        <div className="mt-8">
+        <div className="mt-7">
           <UploadForm />
         </div>
       </div>

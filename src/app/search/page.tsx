@@ -296,17 +296,17 @@ export default async function SearchPage(props: {
               {/* Metadata */}
               <div className="p-3">
                 <div className="flex items-center justify-between">
-                  <p className="text-sm font-medium text-gray-900">
+                  {/* <p className="text-sm font-medium text-gray-900">
                     {r.caption}
-                  </p>
+                  </p> */}
                   <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-700">
-                    match {r.matchCount}
+                    Matches: {r.matchCount} tag{r.matchCount > 1 ? "s" : ""}
                   </span>
                 </div>
 
-                <p className="mt-2 text-xs text-gray-500">
+                {/* <p className="mt-2 text-xs text-gray-500">
                   {new Date(r.createdAt).toLocaleString()}
-                </p>
+                </p> */}
               </div>
             </Link>
           ))}

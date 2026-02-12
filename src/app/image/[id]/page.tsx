@@ -149,7 +149,7 @@ export default async function ImageDetailPage(props: unknown) {
           {image.status === "indexed" ? (
             <Link
               href="/upload"
-              className="rounded-xl bg-gray-900 px-5 py-1.5 text-center text-sm font-medium text-white shadow-sm hover:bg-gray-800"
+              className="rounded-xl bg-gray-900 px-4 py-2 text-center text-sm font-medium text-white shadow-sm hover:bg-gray-800"
             >
               Upload
             </Link>
@@ -161,15 +161,15 @@ export default async function ImageDetailPage(props: unknown) {
         </div>
 
         {/* Main content: image + tag sidebar */}
-        <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[2fr_1fr]">
+        <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[2fr_1fr] lg:items-start">
           {/* Image card */}
           <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
             <div className="flex items-center justify-between">
-              <h1 className="text-lg font-semibold text-gray-900">
+              <h1 className="ml-1 text-lg font-semibold text-gray-900">
                 {image.caption}
               </h1>
 
-              <p className="text-xs text-gray-500">
+              <p className="mr-1 text-xs text-gray-500">
                 {new Date(image.createdAt).toLocaleString()}
               </p>
             </div>
@@ -184,7 +184,7 @@ export default async function ImageDetailPage(props: unknown) {
             </div>
 
             {/* Minimal metadata block */}
-            <div className="mt-4 rounded-2xl bg-gray-50 p-4">
+            {/* <div className="mt-4 rounded-2xl bg-gray-50 p-4">
               <p className="text-xs text-gray-600">
                 <span className="font-medium text-gray-800">sha256:</span>{" "}
                 <span className="font-mono">{image.sha256}</span>
@@ -202,7 +202,7 @@ export default async function ImageDetailPage(props: unknown) {
                   ) : null}
                 </p>
               )}
-            </div>
+            </div> */}
           </div>
 
           {/* Tags card */}
@@ -211,9 +211,7 @@ export default async function ImageDetailPage(props: unknown) {
               Tags ({tags.length})
             </h2>
 
-            <p className="mt-1 text-xs text-gray-500">
-              Ordered by confidence (descending)
-            </p>
+            <p className="mt-1 text-xs text-gray-500">Ordered by confidence</p>
 
             <div className="mt-4 space-y-2">
               {tags.map((t) => (

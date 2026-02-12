@@ -45,58 +45,68 @@ export default function HomePage() {
           </label>
 
           {/* STEP CHANGE:
-              Convert the layout into a 2x2 grid so the “hint line” sits to the LEFT of Upload,
-              just like the input sits to the LEFT of Search.
+              Make layout responsive so it doesn't overflow on mobile.
 
-              Layout:
-                Row 1: [ input ]  [ Search ]
-                Row 2: [ hints ]  [ Upload ]
+              Mobile (default):
+              - 2 rows using flex-col
+              - Row 1: input + Search on one line
+              - Row 2: Upload button below (aligned right)
 
-              Why this fixes the “dragging” feeling:
-              - The hints no longer occupy a full-width block under everything.
-              - They share a row with Upload, keeping the card compact and visually balanced. */}
-          <div className="grid-rows grid grid-cols-[1fr_auto] gap-x-3 gap-y-1">
-            {/* Search input: name="q" is the key detail for GET navigation. */}
-            {/* Row 1, Col 1: input */}
-            <input
-              id="q"
-              name="q"
-              type="text"
-              required
-              placeholder="e.g. ice cream red cap smiling beach..."
-              className="flex-1 rounded-xl border border-gray-200 px-4 py-3 text-sm text-gray-900 shadow-sm outline-none placeholder:text-gray-400 focus:border-gray-300"
-              // Defaulting autoComplete off keeps weird browser suggestions from dominating the MVP UI.
-              autoComplete="off"
-            />
+              Desktop (sm+):
+              - Switch back to the 2x2 grid:
+                Row 1: [input] [Search]
+                Row 2: [hints] [Upload]
+           */}
+          <div className="flex flex-col gap-2 sm:grid sm:grid-cols-[1fr_auto] sm:grid-rows-2 sm:gap-x-3 sm:gap-y-1">
+            {/* --- Mobile Row 1: input + Search --- */}
+            <div className="flex flex-row items-start gap-3 sm:contents">
+              {/* Search input: name="q" is the key detail for GET navigation. */}
+              {/* Input:
+                  STEP CHANGE: slightly reduce horizontal padding on mobile (px-3 instead of px-4)
+                  so the row fits more comfortably on narrow screens.
+                  On sm+ we keep the original padding. */}
+              <input
+                id="q"
+                name="q"
+                type="text"
+                required
+                placeholder="e.g. ice cream red cap smiling beach..."
+                className="min-w-0 flex-1 rounded-xl border border-gray-200 px-3 py-3 text-sm text-gray-900 shadow-sm outline-none placeholder:text-gray-400 focus:border-gray-300 sm:px-4"
+                // Defaulting autoComplete off keeps weird browser suggestions from dominating the MVP UI.
+                autoComplete="off"
+              />
+              {/* Submit button: minimal, neutral styling. */}
+              {/* Search button:
+                  STEP CHANGE: slightly reduce padding on mobile so it fits in the box.
+                  On sm+ it returns to the larger “desktop” padding. */}
+              <button
+                type="submit"
+                className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-center text-sm font-medium text-gray-900 shadow-sm hover:bg-gray-50 sm:px-5"
+              >
+                Search
+              </button>
+            </div>
 
-            {/* Submit button: minimal, neutral styling. */}
-            {/* Row 1, Col 2: Search button */}
-            <button
-              type="submit"
-              className="rounded-xl border border-gray-200 bg-white px-5 py-3 text-center text-sm font-medium text-gray-900 shadow-sm hover:bg-gray-50"
-            >
-              Search
-            </button>
-
-            {/* Row 2, Col 1: hint text (now aligned with Upload) */}
-            {/* STEP CHANGE: center vertically to match the Upload button row */}
-            {/* Hint text: reinforces the frozen semantics gently. */}
-            <p className="ml-1 self-center text-xs text-gray-500">
+            {/* --- Desktop Row 2, Col 1: hints (hidden on mobile) --- */}
+            {/* STEP CHANGE: hide on mobile to reduce clutter as requested. */}
+            <p className="ml-1 hidden self-center text-xs text-gray-500 sm:block">
               Objects | Colors | Actions | Emotions | Settings | Events
             </p>
 
-            {/* Upload button: navigation, half-height.
-                  STEP CHANGE:
-                  - smaller vertical padding (py-1.5) gives “half height” feel
-                  - still full width of the button column
-                  - border style to keep it secondary */}
-            {/* Row 2, Col 2: Upload button (half-height feel) */}
-            <a
-              href="/upload"
-              className="self-center rounded-xl bg-gray-900 px-5 py-1.5 text-center text-sm font-medium text-white shadow-sm hover:bg-gray-800"
-            >
-              Upload
-            </a>
+            {/* --- Upload button --- */}
+            {/* Mobile:
+                - placed as its own row under the input/search row
+                - aligned to the right to feel “attached” to the action buttons
+                Desktop:
+                - sits in grid row 2 col 2 (next to hints) */}
+            <div className="flex justify-end sm:contents">
+              <a
+                href="/upload"
+                className="rounded-xl bg-gray-900 px-4 py-1.5 text-center text-sm font-medium text-white shadow-sm hover:bg-gray-800 sm:self-center sm:px-5"
+              >
+                Upload
+              </a>
+            </div>
           </div>
         </form>
       </div>

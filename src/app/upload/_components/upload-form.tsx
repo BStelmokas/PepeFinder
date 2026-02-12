@@ -425,17 +425,11 @@ export function UploadForm() {
         {stage === "idle" && !error && (
           <p className="text-xs text-gray-600">
             Tip: if you upload a file that already exists (same bytes), we will
-            reuse the existing image record (dedupe by SHA-256) and avoid
-            duplicate work.
+            reuse the existing image record (deduped by SHA-256) to avoid
+            duplicate work. Thank you for your effort regardless.
           </p>
         )}
       </div>
-
-      {/* Implementation gotcha reminder */}
-      <p className="mt-4 text-xs text-gray-500">
-        [FOR ME]: If uploads fail in the browser, check the bucket CORS settings
-        for presigned PUT requests.
-      </p>
     </div>
   );
 }
