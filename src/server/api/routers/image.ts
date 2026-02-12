@@ -11,7 +11,7 @@
  */
 
 import { z } from "zod"; // Runtime validation for inputs at the boundary.
-import { desc, eq } from "drizzle-orm"; // Typed SQL operators.
+import { desc, eq, sql } from "drizzle-orm"; // Typed SQL operators.
 import { TRPCError } from "@trpc/server"; // Canonical error type for tRPC (maps cleanly to HTTP in Next).
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc"; // T3 router/procedure primitives.
 import { imageTags, images, tags } from "~/server/db/schema"; // Table definitions (source of truth).
@@ -58,9 +58,9 @@ export const imageRouter = createTRPCRouter({
           status: images.status,
           createdAt: images.createdAt,
           updatedAt: images.updatedAt,
+          caption: images.caption,
           source: images.source,
           sourceRef: images.sourceRef,
-          caption: images.caption,
         })
         .from(images)
         .where(eq(images.id, input.id))
@@ -137,5 +137,53 @@ export const imageRouter = createTRPCRouter({
         },
         tags: tagRows,
       };
+    }),
+
+  /**
+   * image.setFlag
+   *
+   * Input:
+   * - { id, flagged }
+   *
+   * Behavior:
+   * - if flagged=true  -> increment flag_count by 1
+   * - if flagged=false -> decrement flag_count by 1 (but clamp at 0)
+   *
+   * Why clamp:
+   * - No auth means clients can misbehave.
+   * - We keep DB invariant: flag_count never negative.
+   *
+   * IMPORTANT:
+   * - This is a soft signal, not a security boundary.
+   */
+  setFlag: publicProcedure
+    .input(
+      z.object({
+        id: z.number().int().positive(),
+        flagged: z.boolean(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const delta = input.flagged ? 1 : -1;
+
+      // Atomic update, clamped at 0, all in SQL.
+      // This avoids race conditions and prevents negative counts.
+      const updated = await ctx.db
+        .update(images)
+        .set({
+          flagCount: sql`GREATEST(${images.flagCount} + ${delta}, 0)`,
+          updatedAt: new Date(),
+        })
+        .where(eq(images.id, input.id))
+        .returning({ flagCount: images.flagCount });
+
+      const row = updated[0];
+      if (!row) {
+        // If image doesn't exist, treat like "not found".
+        // We keep this minimal instead of throwing a custom error type.
+        return null;
+      }
+
+      return { flagCount: row.flagCount };
     }),
 });

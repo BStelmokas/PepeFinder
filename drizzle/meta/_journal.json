@@ -15,6 +15,13 @@
       "when": 1770658439097,
       "tag": "0001_jazzy_lily_hollister",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1770923746975,
+      "tag": "0002_ambiguous_gateway",
+      "breakpoints": true
     }
   ]
 }

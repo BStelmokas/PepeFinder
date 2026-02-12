@@ -125,6 +125,19 @@ export const images = pgTable(
      */
     caption: text("caption"),
 
+    // STEP FLAG/DOWNLOAD CHANGE:
+    // Persist a simple counter for “how many times users flagged this image”.
+    //
+    // Why store as a column (instead of computing COUNT(*) from a flags table)?
+    // - You explicitly want “every image must obviously have a flag count in the database”.
+    // - This makes reads trivial and fast (no aggregation).
+    // - We can later add stronger abuse protections without changing the read path.
+    //
+    // Important:
+    // - This is NOT a security boundary; it’s a product feedback signal.
+    // - Without auth, flags are inherently “soft” and may be noisy.
+    flagCount: integer("flag_count").notNull().default(0),
+
     /**
      * Optional attribution fields (kept minimal by design).
      *
@@ -180,6 +193,12 @@ export const images = pgTable(
        * (which typically have null source/sourceRef).
        */
       uniqueIndex("images_source_source_ref_unique").on(t.source, t.sourceRef),
+
+      // STEP FLAG/DOWNLOAD CHANGE:
+      // Optional index: helps if you later build moderation tooling like
+      // “show most-flagged images first”.
+      // It is cheap now and gives you an upgrade path later.
+      index("images_flag_count_idx").on(t.flagCount),
     ];
   },
 );

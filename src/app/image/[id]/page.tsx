@@ -17,6 +17,8 @@ import Link from "next/link"; // Used for navigation back to search/home.
 import { headers } from "next/headers"; // Used to build tRPC context in the server caller path.
 import { createCaller } from "~/server/api/root"; // Typed server-side tRPC caller factory.
 import { createTRPCContext } from "~/server/api/trpc"; // Context builder that preserves middleware invariants.
+// STEP FLAG/DOWNLOAD CHANGE: client component for Download + Flag actions.
+import { ImageActions } from "./_components/image-actions";
 
 /**
  * Next.js App Router "params" boundary helper.
@@ -131,6 +133,11 @@ export default async function ImageDetailPage(props: unknown) {
 
   const { image, tags } = data;
 
+  // Small UX fallback: some images may not have been captioned yet.
+  const title = image.caption?.trim()
+    ? image.caption.trim()
+    : `Image #${image.id}`;
+
   return (
     <main className="min-h-screen bg-white">
       <div className="mx-auto max-w-6xl px-6 py-10">
@@ -164,9 +171,9 @@ export default async function ImageDetailPage(props: unknown) {
         <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[2fr_1fr] lg:items-start">
           {/* Image card */}
           <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-x-4">
               <h1 className="ml-1 text-lg font-semibold text-gray-900">
-                {image.caption}
+                {title}
               </h1>
 
               <p className="mr-1 text-xs text-gray-500">
@@ -174,7 +181,12 @@ export default async function ImageDetailPage(props: unknown) {
               </p>
             </div>
 
-            <div className="mt-4 overflow-hidden rounded-2xl border border-gray-200">
+            {/* STEP OVERLAY CHANGE:
+             Make the image container relative so absolutely-positioned buttons can anchor to it. */}
+            <div className="relative mt-4 overflow-hidden rounded-2xl border border-gray-200">
+              {/* Overlay actions live inside the same relative box */}
+              <ImageActions imageId={image.id} />
+
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={image.renderUrl ?? image.storageKey}
@@ -182,27 +194,6 @@ export default async function ImageDetailPage(props: unknown) {
                 className="h-auto w-full object-contain"
               />
             </div>
-
-            {/* Minimal metadata block */}
-            {/* <div className="mt-4 rounded-2xl bg-gray-50 p-4">
-              <p className="text-xs text-gray-600">
-                <span className="font-medium text-gray-800">sha256:</span>{" "}
-                <span className="font-mono">{image.sha256}</span>
-              </p>
-
-              {(image.source ?? image.sourceRef) && (
-                <p className="mt-2 text-xs text-gray-600">
-                  <span className="font-medium text-gray-800">source:</span>{" "}
-                  {image.source ?? "-"}{" "}
-                  {image.sourceRef ? (
-                    <>
-                      <span className="text-gray-400">·</span>{" "}
-                      <span className="break-all">{image.sourceRef}</span>
-                    </>
-                  ) : null}
-                </p>
-              )}
-            </div> */}
           </div>
 
           {/* Tags card */}

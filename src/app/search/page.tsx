@@ -258,7 +258,7 @@ export default async function SearchPage(props: {
               - flex-1: take remaining space
               - min-w-0: allow shrink (critical for long text in flex rows)
               - pr-2: tiny breathing room from the button */}
-          <div className="inline-flex w-fit max-w-[calc(100%-7rem)] items-center rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+          <div className="inline-flex w-fit max-w-[calc(100%-7rem)] items-center rounded-2xl border border-gray-200 bg-white px-4 py-2 shadow-sm">
             <p className="text-sm text-gray-600">
               Query:{" "}
               {/* STEP 15 UX FIX:
