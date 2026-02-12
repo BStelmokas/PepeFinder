@@ -240,7 +240,9 @@ export default async function SearchPage(props: {
     <main className="min-h-screen bg-white">
       <div className="mx-auto max-w-6xl px-6 py-10">
         {/* Header row: title + small query context */}
-        <h1 className="text-2xl font-semibold text-gray-900">Search results</h1>
+        <h1 className="ml-1 text-2xl font-semibold text-gray-900">
+          Search results
+        </h1>
 
         {/* ========================================================= */}
         {/* STEP 15 LAYOUT REFACTOR: Query + Home button on one line.  */}
@@ -248,11 +250,21 @@ export default async function SearchPage(props: {
         {/* - flex-wrap prevents overflow on small screens             */}
         {/* - Link uses inline-flex/w-fit/self-start to avoid stretch  */}
         {/* ========================================================= */}
-        <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+        {/* STEP 15 UX FIX: prevent long query from pushing button to next line.
+          - no flex-wrap: keep one row
+          - min-w-0 on left container lets text shrink instead of forcing wrap */}
+        <div className="mt-5 flex items-center justify-between gap-5">
+          {/* STEP 15 UX FIX:
+              - flex-1: take remaining space
+              - min-w-0: allow shrink (critical for long text in flex rows)
+              - pr-2: tiny breathing room from the button */}
+          <div className="inline-flex w-fit max-w-[calc(100%-7rem)] items-center rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
             <p className="text-sm text-gray-600">
               Query:{" "}
-              <span className="font-medium text-gray-900">
+              {/* STEP 15 UX FIX:
+                - break-words: wrap long queries onto multiple lines
+                - (optional) you can use break-all if you want to wrap even without spaces */}
+              <span className="font-medium wrap-break-word text-gray-900">
                 {q.trim() === "" ? "(empty)" : q}
               </span>
             </p>
