@@ -70,7 +70,7 @@ export default function HomePage() {
                 name="q"
                 type="text"
                 required
-                placeholder="e.g. ice cream red cap smiling beach..."
+                placeholder="e.g. red cowboy hat horse lasso blue sky..."
                 className="min-w-0 flex-1 rounded-xl border border-gray-200 px-3 py-3 text-sm text-gray-900 shadow-sm outline-none placeholder:text-gray-400 focus:border-gray-300 sm:px-4"
                 // Defaulting autoComplete off keeps weird browser suggestions from dominating the MVP UI.
                 autoComplete="off"
@@ -90,7 +90,7 @@ export default function HomePage() {
             {/* --- Desktop Row 2, Col 1: hints (hidden on mobile) --- */}
             {/* STEP CHANGE: hide on mobile to reduce clutter as requested. */}
             <p className="ml-1 hidden self-center text-xs text-gray-500 sm:block">
-              Objects | Colors | Actions | Emotions | Settings | Events
+              Objects | Colors | Actions | Emotions | Event | Setting
             </p>
 
             {/* --- Upload button --- */}

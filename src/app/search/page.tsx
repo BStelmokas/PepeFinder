@@ -202,7 +202,7 @@ export default async function SearchPage(props: {
    */
   type SearchImagesOutput = Awaited<ReturnType<typeof api.search.searchImages>>;
 
-  const pageSize = 96;
+  const pageSize = 48;
 
   /**
    * Step 3: Execute the search via tRPC.
@@ -240,12 +240,17 @@ export default async function SearchPage(props: {
     <main className="min-h-screen bg-white">
       <div className="mx-auto max-w-6xl px-6 py-10">
         {/* Header row: title + small query context */}
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold text-gray-900">
-              Search results
-            </h1>
-            <p className="mt-5 text-sm text-gray-600">
+        <h1 className="text-2xl font-semibold text-gray-900">Search results</h1>
+
+        {/* ========================================================= */}
+        {/* STEP 15 LAYOUT REFACTOR: Query + Home button on one line.  */}
+        {/* - justify-between puts them at opposite ends              */}
+        {/* - flex-wrap prevents overflow on small screens             */}
+        {/* - Link uses inline-flex/w-fit/self-start to avoid stretch  */}
+        {/* ========================================================= */}
+        <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+            <p className="text-sm text-gray-600">
               Query:{" "}
               <span className="font-medium text-gray-900">
                 {q.trim() === "" ? "(empty)" : q}
@@ -253,25 +258,37 @@ export default async function SearchPage(props: {
             </p>
           </div>
 
+          {/* ========================================================= */}
+          {/* STEP 15 LAYOUT REFACTOR: Query + Home button on one line.  */}
+          {/* - justify-between puts them at opposite ends              */}
+          {/* - flex-wrap prevents overflow on small screens             */}
+          {/* - Link uses inline-flex/w-fit/self-start to avoid stretch  */}
+          {/* ========================================================= */}
           {/* Back to home for quick re-searching (keeps MVP flow obvious). */}
           <Link
             href="/"
-            className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-center text-sm font-medium text-gray-900 shadow-sm hover:bg-gray-50"
+            className="inline-flex w-fit shrink-0 items-center justify-center rounded-xl border border-gray-200 bg-white px-4 py-2 text-center text-sm font-medium text-gray-900 shadow-sm hover:bg-gray-50"
           >
             ← Search
           </Link>
         </div>
 
+        {/* ========================================================= */}
+        {/* STEP 15 LAYOUT REFACTOR: Summary box should fit content.   */}
+        {/* - wrap in a flex row so the child can be w-fit             */}
+        {/* ========================================================= */}
         {/* Result summary */}
-        <div className="mt-6 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-          <p className="text-sm text-gray-700">
-            {results.totalCount} result{results.totalCount === 1 ? "" : "s"}{" "}
-            (ranked by tag overlap)
-          </p>
+        <div className="mt-4 flex">
+          <div className="w-fit rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+            <p className="text-sm text-gray-700">
+              {results.totalCount} result{results.totalCount === 1 ? "" : "s"}{" "}
+              (ranked by tag overlap)
+            </p>
 
-          <p className="mt-1 text-xs text-gray-500">
-            Showing {shownSoFar} of {results.totalCount}
-          </p>
+            <p className="mt-1 text-xs text-gray-500">
+              Showing {shownSoFar} of {results.totalCount}
+            </p>
+          </div>
         </div>
 
         {/* Grid */}

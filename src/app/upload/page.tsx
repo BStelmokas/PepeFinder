@@ -42,8 +42,10 @@ export default function UploadPage() {
           </Link>
         </div>
 
-        <h1 className="mt-4 text-2xl font-semibold text-gray-900">Upload</h1>
-        <p className="mt-6 text-sm text-gray-600">
+        <h1 className="mt-4 ml-2 text-2xl font-semibold text-gray-900">
+          Upload
+        </h1>
+        <p className="mt-6 ml-2 text-sm text-gray-600">
           Upload your own Pepe images to support this public corpus. Upon upload
           an image has to await a worker to push it through a vision model, so
           it may not appear in search immediately.
