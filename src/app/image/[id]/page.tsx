@@ -233,8 +233,8 @@ export default async function ImageDetailPage(props: unknown) {
             {tags.length === 0 && (
               <div className="mt-6 rounded-2xl bg-gray-50 p-4">
                 <p className="text-sm text-gray-700">
-                  No tags yet. (This can happen for pending/failed images in
-                  MVP1.)
+                  No tags yet. The image has been accepted, once the tags are
+                  produced, it will be listed.
                 </p>
               </div>
             )}
