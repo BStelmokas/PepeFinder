@@ -45,7 +45,6 @@ type UiStage =
   | "planning"
   | "uploading"
   | "enqueuing"
-  | "indexing"
   | "failed";
 
 /**
@@ -106,65 +105,6 @@ export function UploadForm() {
    * - It is idempotent due to unique(image_id) in tag_jobs.
    */
   const enqueueJob = api.upload.enqueueTaggingJob.useMutation();
-
-  /**
-   * Poll image.getById once we have an imageId.
-   *
-   * Polling strategy:
-   * - enabled only when stage === "indexing" and imageId exists
-   * - refetch every 2 seconds (cheap at MVP scale)
-   *
-   * What we’re waiting for:
-   * - status === "indexed" -> redirect to /image/[id]
-   * - status === "failed"  -> show error
-   *
-   * Note:
-   * - Right now, nothing actually flips pending -> indexed for uploads until we add the worker.
-   * - That’s okay: UI will show “Indexing…” which is truthful.
-   * - Once the worker exists, this page becomes fully functional without changes.
-   */
-  const imageQuery = api.image.getById.useQuery(
-    { id: imageId ?? 1 },
-    {
-      enabled: imageId !== null && stage === "indexing",
-      refetchInterval: 2000,
-      retry: false,
-    },
-  );
-
-  /**
-   * Derived “status” for display:
-   * - If polling is active and we have data, read status from it.
-   * - Otherwise show nothing.
-   */
-  const polledStatus = imageQuery.data?.image.status;
-
-  /**
-   * Side-effects based on polled status belong in useEffect.
-   *
-   * This fixes:
-   * - "Cannot update a component while rendering a different component"
-   * - any accidental render loops
-   */
-  useEffect(() => {
-    // Redirect when the polled status becomes "indexed".
-    if (stage !== "indexing" || imageId === null || !polledStatus) return;
-
-    if (polledStatus === "indexed") {
-      // Navigation is a side-effect → useEffect.
-      router.push(`/image/${imageId}`);
-      return;
-    }
-
-    // If worker marks it failed, stop polling and show a clear message.
-    if (polledStatus === "failed") {
-      // State updates are also side-effects → useEffect.
-      setStage("failed");
-      setError(
-        "Indexing failed. The image was stored, but tagging did not complete.",
-      );
-    }
-  }, [stage, imageId, polledStatus, router]);
 
   /**
    * Validate the selected file locally for UX.
@@ -229,37 +169,32 @@ export function UploadForm() {
       setImageId(plan.imageId);
 
       /**
-       * If already exists:
-       * - If indexed -> go straight to detail page (best UX).
-       * - If pending/failed: best effort enqueue (idempotent), then poll.
+       * STEP 12 UI CHANGE:
+       * We ALWAYS redirect to /image/[id] after a successful flow.
        *
-       * Why enqueue even if "failed"?
-       * - In MVP1, "failed" could mean transient worker crash.
-       * - Unique(image_id) prevents duplicates; worker retry policy decides behavior.
-       * - If you later decide “failed should never retry”, the worker can enforce that.
+       * Why:
+       * - /upload is not a waiting room
+       * - worker may not be running; polling would stall forever
+       * - /image/[id] is where status belongs
        */
+
+      // Case A: Deduped image already exists.
       if (plan.alreadyExists) {
         if (plan.status === "indexed") {
           router.push(`/image/${plan.imageId}`);
           return;
         }
 
+        // Otherwise, best-effort enqueue, then redirect immediately.
         setStage("enqueuing");
         await enqueueJob.mutateAsync({ imageId: plan.imageId });
 
-        setStage("indexing");
+        // Redirect even if still pending/failed: detail page will show status.
+        router.push(`/image/${plan.imageId}`);
         return;
       }
 
-      /**
-       * Step 3: Upload bytes to S3 via presigned PUT
-       *
-       * Important gotcha:
-       * - Your bucket must allow PUT using presigned URLs.
-       * - Most providers require CORS config for browser PUT requests.
-       *
-       * This request goes directly to S3, not through your Next server.
-       */
+      // Case B: New image — upload bytes to S3 via presigned PUT.
       setStage("uploading");
 
       const putRes = await fetch(plan.uploadUrl, {
@@ -284,13 +219,8 @@ export function UploadForm() {
       setStage("enqueuing");
       await enqueueJob.mutateAsync({ imageId: plan.imageId });
 
-      /**
-       * Step 4: Enter indexing state and poll.
-       *
-       * We do NOT mark indexed here.
-       * That is the worker’s job (cost-safety invariant).
-       */
-      setStage("indexing");
+      // Redirect immediately
+      router.push(`/image/${plan.imageId}`);
     } catch (e) {
       setStage("failed");
       setError(e instanceof Error ? e.message : "Upload failed.");
@@ -330,8 +260,7 @@ export function UploadForm() {
             stage === "hashing" ||
             stage === "planning" ||
             stage === "uploading" ||
-            stage === "enqueuing" ||
-            stage === "indexing"
+            stage === "enqueuing"
           }
         />
 
@@ -362,15 +291,13 @@ export function UploadForm() {
             stage === "hashing" ||
             stage === "planning" ||
             stage === "uploading" ||
-            stage === "enqueuing" ||
-            stage === "indexing"
+            stage === "enqueuing"
           }
         >
           {stage === "hashing" && "Hashing..."}
           {stage === "planning" && "Preparing..."}
           {stage === "uploading" && "Uploading..."}
           {stage === "enqueuing" && "Queuing..."}
-          {stage === "indexing" && "Indexing..."}
           {(stage === "idle" || stage === "validating" || stage === "failed") &&
             "Upload"}
         </button>
@@ -385,12 +312,19 @@ export function UploadForm() {
           </p>
         )}
 
-        {/* Indexing status */}
-        {stage === "indexing" && (
+        {/* STEP 12 UI CHANGE:
+            We no longer display a long “indexing/polling” panel here because we redirect.
+            But it's still useful to show a short progress hint while the user is waiting
+            for the redirect to happen during upload/enqueue stages. */}
+        {!error && stage !== "idle" && (
           <div className="space-y-2">
             <p className="text-sm text-gray-700">
-              <span className="font-medium text-gray-900">Indexing...</span>{" "}
-              Your image was stored. Tagging will complete in the background.
+              <span className="font-medium text-gray-900">Status:</span>{" "}
+              {stage === "hashing" && "hashing file"}
+              {stage === "planning" && "preparing upload"}
+              {stage === "uploading" && "uploading bytes to storage"}
+              {stage === "enqueuing" && "queuing background tagging"}
+              {stage === "validating" && "validating"}
             </p>
 
             {imageId !== null && (
@@ -399,23 +333,10 @@ export function UploadForm() {
               </p>
             )}
 
-            <p className="text-xs text-gray-500">
-              Current status:{" "}
-              <span className="font-medium text-gray-800">
-                {polledStatus ?? "pending"}
-              </span>
-              {imageQuery.isFetching ? " (checking...)" : ""}
-            </p>
-
-            {imageId !== null && (
-              <p className="text-xs text-gray-600">
-                You can also open the detail page now:{" "}
-                <a
-                  className="underline hover:text-gray-900"
-                  href={`/image/${imageId}`}
-                >
-                  /image/{imageId}
-                </a>
+            {stage === "enqueuing" && imageId !== null && (
+              <p className="text-xs text-gray-500">
+                Next: redirecting to{" "}
+                <span className="font-mono">/image/{imageId}</span>…
               </p>
             )}
           </div>
