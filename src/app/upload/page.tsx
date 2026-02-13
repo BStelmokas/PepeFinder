@@ -46,9 +46,9 @@ export default function UploadPage() {
           Upload
         </h1>
         <p className="mt-6 ml-2 text-sm text-gray-600">
-          Upload your own Pepe images to support the public corpus. Upon upload
-          images have to await being pushed through a vision model, so they may
-          not appear in search right away.
+          Upload your own Pepe images to support the public corpus. Upon
+          ingestion images have to await being pushed through a vision model, so
+          they may not appear in search right away.
         </p>
 
         {/* Client-side uploader: isolated for correctness + minimal JS surface. */}
