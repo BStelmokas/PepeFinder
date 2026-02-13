@@ -258,7 +258,7 @@ export default async function SearchPage(props: {
               - flex-1: take remaining space
               - min-w-0: allow shrink (critical for long text in flex rows)
               - pr-2: tiny breathing room from the button */}
-          <div className="inline-flex w-fit max-w-[calc(100%-7rem)] items-center rounded-2xl border border-gray-200 bg-white px-4 py-2 shadow-sm">
+          <div className="inline-flex w-fit max-w-[calc(100%-7rem)] items-center rounded-xl border border-gray-200 bg-white px-4 py-2 shadow-sm">
             <p className="text-sm text-gray-600">
               Query:{" "}
               {/* STEP 15 UX FIX:
@@ -325,17 +325,10 @@ export default async function SearchPage(props: {
               {/* Metadata */}
               <div className="p-3">
                 <div className="flex items-center justify-center">
-                  {/* <p className="text-sm font-medium text-gray-900">
-                    {r.caption}
-                  </p> */}
                   <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-700">
                     Matches: {r.matchCount} tag{r.matchCount > 1 ? "s" : ""}
                   </span>
                 </div>
-
-                {/* <p className="mt-2 text-xs text-gray-500">
-                  {new Date(r.createdAt).toLocaleString()}
-                </p> */}
               </div>
             </Link>
           ))}
@@ -359,7 +352,7 @@ export default async function SearchPage(props: {
         {results.items.length === 0 && (
           <div className="mt-10 rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-sm">
             <p className="text-sm text-gray-700">
-              No matches. Try fewer words or different tags.
+              No matches. Try different wording.
             </p>
           </div>
         )}

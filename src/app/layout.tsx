@@ -41,12 +41,12 @@ export default function RootLayout({
               - Industry baseline
             */}
             <footer className="border-t border-gray-100 bg-white">
-              <div className="mx-auto flex max-w-6xl flex-col gap-2 px-6 py-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-6 py-4">
                 <p className="text-sm text-gray-500">
                   © {new Date().getFullYear()} PepeFinder
                 </p>
 
-                <nav className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
+                <nav className="flex flex-wrap justify-end gap-x-4 gap-y-2 text-sm">
                   {/* Contact */}
                   <a
                     href={`mailto:${CONTACT_EMAIL}`}
