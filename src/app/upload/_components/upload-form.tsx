@@ -426,7 +426,7 @@ export function UploadForm() {
           <p className="text-xs text-gray-600">
             Tip: if you upload a file that already exists (same bytes), we will
             reuse the existing image record (deduped by SHA-256) to avoid
-            duplicate work. Thank you for your effort regardless.
+            duplicate work.
           </p>
         )}
       </div>
