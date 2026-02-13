@@ -138,7 +138,7 @@ export function ImageDetailLayout(props: {
             href="/"
             className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-center text-sm font-medium text-gray-900 shadow-sm hover:bg-gray-50"
           >
-            ← Search
+            ← Home
           </Link>
 
           {/* STEP CHANGE:
