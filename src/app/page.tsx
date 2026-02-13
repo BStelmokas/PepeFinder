@@ -21,6 +21,13 @@ export default function HomePage() {
     <main className="min-h-screen bg-white">
       {/* Center the content both vertically and horizontally for a clean MVP landing. */}
       <div className="mx-auto flex min-h-screen max-w-3xl flex-col items-center justify-center px-6">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        {/* <img
+          src="/brand/pepe-logo.png"
+          alt="PepeFinder logo"
+          className="mb-4 h-60 w-60 drop-shadow-sm select-none"
+          draggable={false}
+        /> */}
         {/* Product name as a simple, strong header. */}
         <h1 className="text-4xl font-semibold tracking-tight text-gray-900">
           PepeFinder
