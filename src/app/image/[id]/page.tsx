@@ -20,6 +20,9 @@ import { createTRPCContext } from "~/server/api/trpc"; // Context builder that p
 // STEP FLAG/DOWNLOAD CHANGE: client component for Download + Flag actions.
 import { ImageActions } from "./_components/image-actions";
 
+// STEP 99 CHANGE: new client layout component that syncs tags height to image height (on ALL devices).
+import { ImageDetailLayout } from "./_components/image-detail-layout";
+
 /**
  * Next.js App Router "params" boundary helper.
  *
@@ -138,100 +141,28 @@ export default async function ImageDetailPage(props: unknown) {
     ? image.caption.trim()
     : `Image #${image.id}`;
 
+  /**
+   * STEP 99 CHANGE:
+   * We delegate the full rendering (image + tags layout) to a client component.
+   *
+   * Why this is required:
+   * - Your rule is “tags panel height must match image panel height, on ALL devices”.
+   * - This requires runtime DOM measurement.
+   * - Server Components cannot measure runtime layout.
+   */
   return (
-    <main className="min-h-screen bg-white">
-      <div className="mx-auto max-w-6xl px-6 py-10">
-        {/* Top navigation */}
-        <div className="flex items-center justify-between">
-          <Link
-            href="/"
-            className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-center text-sm font-medium text-gray-900 shadow-sm hover:bg-gray-50"
-          >
-            ← Search
-          </Link>
-
-          {/* STEP CHANGE:
-              Replace the redundant "status: indexed" pill with an Upload button.
-              Keep the status pill for pending/failed, because those are meaningful states. */}
-          {image.status === "indexed" ? (
-            <Link
-              href="/upload"
-              className="rounded-xl bg-gray-900 px-4 py-2 text-center text-sm font-medium text-white shadow-sm hover:bg-gray-800"
-            >
-              Upload
-            </Link>
-          ) : (
-            <span className="rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-700">
-              status: {image.status}
-            </span>
-          )}
-        </div>
-
-        {/* Main content: image + tag sidebar */}
-        <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[2fr_1fr] lg:items-start">
-          {/* Image card */}
-          <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-            <div className="flex items-center justify-between gap-x-4">
-              <h1 className="ml-1 text-lg font-semibold text-gray-900">
-                {title}
-              </h1>
-
-              <p className="mr-1 text-xs text-gray-500">
-                {new Date(image.createdAt).toLocaleString()}
-              </p>
-            </div>
-
-            {/* STEP OVERLAY CHANGE:
-             Make the image container relative so absolutely-positioned buttons can anchor to it. */}
-            <div className="relative mt-4 overflow-hidden rounded-2xl border border-gray-200">
-              {/* Overlay actions live inside the same relative box */}
-              <ImageActions imageId={image.id} />
-
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={image.renderUrl ?? image.storageKey}
-                alt={`Pepe image ${image.id}`}
-                className="h-auto w-full object-contain"
-              />
-            </div>
-          </div>
-
-          {/* Tags card */}
-          <aside className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-            <h2 className="text-sm font-semibold text-gray-900">
-              Tags ({tags.length})
-            </h2>
-
-            <p className="mt-1 text-xs text-gray-500">Ordered by confidence</p>
-
-            <div className="mt-4 space-y-2">
-              {tags.map((t) => (
-                <div
-                  key={t.id}
-                  className="flex items-center justify-between rounded-xl border border-gray-200 bg-white px-3 py-2"
-                >
-                  <span className="text-sm font-medium text-gray-900">
-                    {t.name}
-                  </span>
-
-                  <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-700">
-                    {t.confidence.toFixed(2)}
-                  </span>
-                </div>
-              ))}
-            </div>
-
-            {tags.length === 0 && (
-              <div className="mt-6 rounded-2xl bg-gray-50 p-4">
-                <p className="text-sm text-gray-700">
-                  No tags yet. The image has been accepted, once the tags are
-                  produced, it will be listed.
-                </p>
-              </div>
-            )}
-          </aside>
-        </div>
-      </div>
-    </main>
+    <ImageDetailLayout
+      imageStatus={image.status}
+      imageId={image.id}
+      title={title}
+      createdAtIso={image.createdAt.toISOString()}
+      imageUrl={image.renderUrl ?? image.storageKey}
+      ImageActionsSlot={<ImageActions imageId={image.id} />}
+      tags={tags.map((t) => ({
+        id: t.id,
+        name: t.name,
+        confidence: t.confidence,
+      }))}
+    />
   );
 }
