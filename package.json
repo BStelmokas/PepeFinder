@@ -25,7 +25,8 @@
     "reddit:ingest": "node --env-file=.env --import tsx scripts/reddit_ingest.ts",
     "reddit:takedown": "node --env-file=.env --import tsx scripts/reddit_takedown.ts",
     "reddit:ingest:files": "node --env-file=.env --import tsx scripts/reddit_ingest_from_files.ts",
-    "flags:moderate": "node --env-file=.env --import tsx scripts/flags_moderate.ts"
+    "flags:moderate": "node --env-file=.env --import tsx scripts/flags_moderate.ts",
+    "remove:stopwords": "node --env-file=.env --import tsx scripts/remove_stopword_tags.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.975.0",
