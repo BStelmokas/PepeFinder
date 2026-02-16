@@ -22,7 +22,6 @@ import Link from "next/link"; // Next Link gives fast client navigation while st
 import { headers } from "next/headers"; // Provides request headers (we’ll use it for creating the tRPC context).
 import { createCaller } from "~/server/api/root"; // Typed server-side tRPC caller factory.
 import { createTRPCContext } from "~/server/api/trpc"; // Context builder used by tRPC middleware (even in server calls).
-import { match } from "assert";
 
 /**
  * The shape Next provides for the resolved search params object.

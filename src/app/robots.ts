@@ -23,9 +23,7 @@
  */
 
 import type { MetadataRoute } from "next";
-import { headers } from "next/headers";
 import getOrigin from "src/lib/url/get-origin";
-import { env } from "~/env";
 
 export default async function robots(): Promise<MetadataRoute.Robots> {
   const origin = await getOrigin();

@@ -21,7 +21,8 @@ import { db } from "~/server/db"; // ✅ DB singleton (T3 rule: one exported db 
 import { images } from "~/server/db/schema"; // ✅ Drizzle schema table definition.
 import getOrigin from "src/lib/url/get-origin";
 
-export const revalidate = 60 * 60; // Re-generate at most once per hour
+// ✅ IMPORTANT: Next.js requires this to be statically analyzable (a literal), not an expression.
+export const revalidate = 3600; // Re-generate at most once per hour
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const origin = await getOrigin();
