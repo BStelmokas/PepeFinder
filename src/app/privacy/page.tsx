@@ -35,7 +35,7 @@ export default function PrivacyPage() {
 
         <p className="mt-3 text-sm text-gray-700">
           PepeFinder is a private meme search engine. We store images and
-          generated tags so you can search them later.
+          generate tags so you can search them.
         </p>
 
         <h2 className="mt-6 text-sm font-semibold text-gray-900">

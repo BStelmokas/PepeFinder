@@ -18,7 +18,11 @@ import { sql } from "drizzle-orm";
 import { db } from "~/server/db";
 import { env } from "~/env";
 import { imageTags, images, tagJobs, tags } from "~/server/db/schema";
-import { normalizeTagName, tokenizeQuery } from "~/lib/text/normalize";
+import {
+  expandHyphenatedToken,
+  normalizeTagName,
+  tokenizeQuery,
+} from "~/lib/text/normalize";
 import { tagImageWithOpenAI } from "~/server/ai/openai-vision-tagger";
 import { resolveImageUrlForModel } from "~/server/storage/resolve-image-url";
 
@@ -150,43 +154,51 @@ async function writeTagsForImage(args: {
       const normalized = normalizeTagName(s.name);
       if (!normalized) continue;
 
-      // Upsert tag row by unique(tags.name).
-      const insertedTag = await tx
-        .insert(tags)
-        .values({ name: normalized })
-        .onConflictDoNothing()
-        .returning({ id: tags.id });
+      // ✅ PROPOSED CHANGE: expand hyphenated tokens into additional atomic tokens.
+      // Example:
+      // - "film-noir" -> ["film-noir","film","noir"]
+      // - "red-shirt" -> ["red-shirt","red","shirt"]
+      const expandedNames = expandHyphenatedToken(normalized);
 
-      let tagId: number;
+      for (const name of expandedNames) {
+        // Upsert tag row by unique(tags.name).
+        const insertedTag = await tx
+          .insert(tags)
+          .values({ name: normalized })
+          .onConflictDoNothing()
+          .returning({ id: tags.id });
 
-      if (insertedTag.length > 0) {
-        tagId = insertedTag[0]!.id;
-      } else {
-        // Fetch existing id (conflict path).
-        const existing = await tx
-          .select({ id: tags.id })
-          .from(tags)
-          .where(sql`${tags.name} = ${normalized}`)
-          .limit(1);
+        let tagId: number;
 
-        if (!existing[0]) {
-          throw new Error(
-            `Tag conflict but cannot fetch id for: ${normalized}`,
-          );
+        if (insertedTag.length > 0) {
+          tagId = insertedTag[0]!.id;
+        } else {
+          // Fetch existing id (conflict path).
+          const existing = await tx
+            .select({ id: tags.id })
+            .from(tags)
+            .where(sql`${tags.name} = ${normalized}`)
+            .limit(1);
+
+          if (!existing[0]) {
+            throw new Error(
+              `Tag conflict but cannot fetch id for: ${normalized}`,
+            );
+          }
+
+          tagId = existing[0].id;
         }
 
-        tagId = existing[0].id;
+        // Insert join row (idempotent because image_tags has composite PK).
+        await tx
+          .insert(imageTags)
+          .values({
+            imageId: args.imageId,
+            tagId,
+            confidence: s.confidence,
+          })
+          .onConflictDoNothing();
       }
-
-      // Insert join row (idempotent because image_tags has composite PK).
-      await tx
-        .insert(imageTags)
-        .values({
-          imageId: args.imageId,
-          tagId,
-          confidence: s.confidence,
-        })
-        .onConflictDoNothing();
     }
   });
 }

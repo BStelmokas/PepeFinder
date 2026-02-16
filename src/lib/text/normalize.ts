@@ -329,3 +329,50 @@ export function normalizeTagName(rawTag: string): string | null {
 
   return normalized;
 }
+
+/**
+ * ✅ PROPOSED CHANGE:
+ * Expand a *single normalized token* into itself + its hyphen-split components.
+ *
+ * Goal:
+ * - If a stored tag is "film-noir", we ALSO want "film" and "noir" on the same image.
+ * - This makes queries like "film noir" match images tagged with "film-noir".
+ *
+ * Critical design constraints:
+ * - We DO NOT change tokenization semantics:
+ *   tokenizeQuery("film-noir") still yields ["film-noir"] (one token).
+ * - Instead, we enforce a *storage invariant*:
+ *   hyphenated tokens imply additional atomic tokens.
+ *
+ * Rules:
+ * - If there is no hyphen, return [token].
+ * - If there is a hyphen, split on "-" and keep only valid parts.
+ * - We never drop the original hyphenated token.
+ *
+ * Why validate parts with normalizeTagName()?
+ * - Keeps behavior consistent with all other rules (ASCII, stopwords, etc.).
+ * - Example: "a-b" would produce "a" which is a stopword → we skip that part.
+ */
+export function expandHyphenatedToken(normalizedSingleToken: string): string[] {
+  // Fast path: most tokens aren’t hyphenated.
+  if (!normalizedSingleToken.includes("-")) return [normalizedSingleToken];
+
+  // Split into candidate parts.
+  const rawParts = normalizedSingleToken.split("-").filter((p) => p.length > 0);
+
+  // If splitting produces nothing useful, keep just the original.
+  if (rawParts.length < 2) return [normalizedSingleToken];
+
+  const out: string[] = [normalizedSingleToken];
+
+  for (const p of rawParts) {
+    // Validate each part against the same storage rules.
+    const normalizedPart = normalizeTagName(p);
+    if (!normalizedPart) continue;
+
+    // Avoid duplicates if something weird happens.
+    if (!out.includes(normalizedPart)) out.push(normalizedPart);
+  }
+
+  return out;
+}
