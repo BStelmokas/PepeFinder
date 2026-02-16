@@ -22,6 +22,8 @@
  * - stopwords: skipped (intentionally) to avoid hidden semantics in MVP
  */
 
+export const DEFAULT_STOPWORDS = new Set(["a", "an", "the"]);
+
 /**
  * Normalize a string’s whitespace exactly per spec:
  * - trim leading/trailing whitespace
@@ -172,6 +174,60 @@ export function stripPunctuationPreserveInnerHyphens(input: string): string {
 }
 
 /**
+ * Remove stopwords from an array of normalized tokens.
+ *
+ * Important invariants:
+ * - We remove only *exact token matches* (no substring removal).
+ * - We preserve order.
+ * - We do NOT dedupe here; caller decides whether/when to dedupe.
+ *
+ * Why this helper exists:
+ * - We need stopword removal in more than one place:
+ *   - tokenizeQuery
+ *   - model tag post-processing (phrases)
+ * - Centralizing it prevents silent drift.
+ */
+export function removeStopwordsFromTokens(
+  tokens: string[],
+  stopwords: ReadonlySet<string> = DEFAULT_STOPWORDS,
+): string[] {
+  const out: string[] = [];
+
+  for (const t of tokens) {
+    // Only drop whole-token stopwords (e.g. "a"), not substrings.
+    if (stopwords.has(t)) continue;
+
+    out.push(t);
+  }
+
+  return out;
+}
+
+/**
+ * Remove stopwords from a *phrase* (potentially multi-token string).
+ *
+ * Why this exists:
+ * - Your vision model sometimes returns multi-word phrases like "a frog".
+ * - We want to reduce those to meaningful primitives ("frog") BEFORE later validation.
+ *
+ * Design:
+ * - This assumes the phrase is already normalized with normalizeQueryString(),
+ *   i.e. spaces are canonical and punctuation is already handled.
+ */
+export function removeStopwordsFromPhrase(
+  normalizedPhrase: string,
+  stopwords: ReadonlySet<string> = DEFAULT_STOPWORDS,
+): string {
+  if (normalizedPhrase.length === 0) return "";
+
+  const tokens = normalizedPhrase.split(" ").filter((t) => t.length > 0);
+
+  const filtered = removeStopwordsFromTokens(tokens, stopwords);
+
+  return filtered.join(" ");
+}
+
+/**
  * Normalize a raw user query string into the normalized query form.
  *
  * This is primarily useful for:
@@ -224,11 +280,14 @@ export function tokenizeQuery(rawQuery: string): string[] {
   // Split on ASCII spaces because normalizeWhitespace guarantees we only have single spaces.
   const parts = normalized.split(" ");
 
+  // Remove stopwords before dedupe so they never participate in ranking.
+  const filtered = removeStopwordsFromTokens(parts, DEFAULT_STOPWORDS);
+
   // Deduplicate while preserving first-seen order.
   const seen = new Set<string>();
   const tokens: string[] = [];
 
-  for (const p of parts) {
+  for (const p of filtered) {
     // Defensive: ignore any empty segments (shouldn’t exist due to normalization).
     if (p.length === 0) continue;
 
@@ -259,6 +318,10 @@ export function normalizeTagName(rawTag: string): string | null {
 
   // An empty string is not a valid tag.
   if (normalized.length === 0) return null;
+
+  // If the tag *is itself* a stopword, drop it.
+  // Example: "the" -> null
+  if (DEFAULT_STOPWORDS.has(normalized)) return null;
 
   // Tags in this model must be a single token.
   // If normalization produced spaces, that means the tag contained multiple tokens.

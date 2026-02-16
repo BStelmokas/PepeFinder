@@ -46,12 +46,13 @@ export const instruction = [
 
   // --- Tag list size + style (search primitives) ---
   "tags rules:",
-  "- Produce 25 to 45 tags total (not counting the caption).",
+  "- Produce 25 to 60 tags total (not counting the caption).",
   "- Prefer fewer tags over inventing uncertain ones to reach the count.",
   "- Each tag name must be 1–2 words (3 max only if truly necessary).",
   "- Prefer lowercase ASCII; avoid emojis; avoid punctuation except hyphens.",
   "- Do not include filler words like: very, kind of, maybe, looks like.",
   "- Do not output near-duplicate synonyms unless they refer to meaningfully different concepts.",
+  `- Do not include stopwords as tags: "a", "an", "the".`,
 
   // --- Confidence semantics (for display only; ranking ignores confidence) ---
   "confidence rules:",
@@ -77,13 +78,20 @@ export const instruction = [
   "- color: include simple color tags (red, blue, green, brown, black, white, yellow, pink, purple, orange, gray) only when clearly visible.",
   '- For color tags, prefer pairing with the corresponding object also being present in tags (e.g., include both "brown" and "chair" if a brown chair is clearly visible).',
   "- Consider that there is a difference between Pepe and Apustaja.",
-  `- If the image contains text, add tags "text" and / or "greentext".`,
-  `- Any text that the image contains, must included in the tags (transcribed into them), as much as possible.`,
+
+  /**
+   * Text extraction rule
+   */
+  "text rules (VERY IMPORTANT):",
+  '- If the image contains readable text, add tag "text".',
+  '- If the image is green-on-black terminal style, also add tag "greentext".',
+  "- Transcribe ALL LEGIBLE text exactly as it appears (do not guess missing letters).",
+  "- Add each transcribed WORD as its own tag (lowercase; punctuation removed).",
+  '- Example: sign says "make love not war" => add tags: "make", "love", "not", "war".',
 
   // --- Important: do NOT try to satisfy stemming/tense requirements in prompt ---
   "Important:",
-  '- Do NOT add tense variants (e.g., "rain" and "raining") just to be safe.',
-  "- Output the single most natural base form for actions (we will expand variants deterministically in code).",
+  "- Output the single most natural base form for actions.",
 
   // --- Final sanity constraints ---
   "Sanity checks before you respond:",

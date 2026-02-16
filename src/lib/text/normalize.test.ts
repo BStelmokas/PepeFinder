@@ -9,10 +9,13 @@
 
 import { describe, expect, it } from "vitest";
 import {
+  DEFAULT_STOPWORDS,
   lowercaseAsciiOnly,
   normalizeQueryString,
   normalizeTagName,
   normalizeWhitespace,
+  removeStopwordsFromPhrase,
+  removeStopwordsFromTokens,
   stripNonAscii,
   tokenizeQuery,
 } from "./normalize";
@@ -56,6 +59,28 @@ describe("normalizeQueryString", () => {
 
   it("normalizes to empty string when nothing ASCII remains", () => {
     expect(normalizeQueryString("🐸🐸🐸")).toBe("");
+  });
+});
+
+describe("stopwords helpers", () => {
+  it("DEFAULT_STOPWORDS contains the tiny conservative set", () => {
+    // This test makes stopword list changes explicit (no “silent” semantics changes).
+    expect(Array.from(DEFAULT_STOPWORDS)).toEqual(["a", "an", "the"]);
+  });
+
+  it("removeStopwordsFromTokens removes only whole-token stopwords", () => {
+    expect(removeStopwordsFromTokens(["a", "frog", "the", "sad"])).toEqual([
+      "frog",
+      "sad",
+    ]);
+    expect(
+      removeStopwordsFromTokens(["theory", "apple", "the", "anthropology"]),
+    ).toEqual(["theory", "apple", "anthropology"]);
+  });
+
+  it("removeStopwordsFromPhrase removes stopwords from normalized phrases", () => {
+    expect(removeStopwordsFromPhrase("a frog")).toBe("frog");
+    expect(removeStopwordsFromPhrase("the sad pepe")).toBe("sad pepe");
   });
 });
 
@@ -106,7 +131,6 @@ describe("punctuation stripping (preserve inner hyphens)", () => {
     expect(tokenizeQuery("it, was! a (film-noir)")).toEqual([
       "it",
       "was",
-      "a",
       "film-noir",
     ]);
     expect(normalizeTagName("film-noir")).toBe("film-noir");

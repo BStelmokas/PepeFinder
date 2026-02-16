@@ -16,7 +16,10 @@
  */
 
 import { env } from "~/env"; // Centralized env access; never read process.env outside env.ts.
-import { normalizeTagName } from "~/lib/text/normalize"; // Our frozen normalization logic (single source of truth).
+import {
+  tokenizeQuery, // ✅ KEY CHANGE: treat model “tag names” as phrases and tokenize them into atomic tags
+} from "~/lib/text/normalize";
+
 import { instruction } from "~/server/ai/taggingPrompt";
 
 /**
@@ -156,6 +159,19 @@ function extractFirstOutputText(resp: unknown): string {
  *
  * Doing this parsing in a separate function keeps tagImageWithOpenAI() readable.
  */
+/**
+ * Parse model JSON into ModelTaggingResult.
+ *
+ * ✅ KEY CHANGE:
+ * - We DO NOT force model tag names to be single tokens directly.
+ * - We treat them as free-form phrases, then run tokenizeQuery(name).
+ *
+ * Why this is the “correct” architecture:
+ * - tokenizeQuery is your frozen semantic contract.
+ * - Queries and tags must speak the same “language” (same normalization + stopwords).
+ * - If the model outputs "a sad frog", tokenizeQuery yields ["sad","frog"].
+ * - Those become stored primitives, matching how user searches work.
+ */
 function parseModelJson(outputText: string): ModelTaggingResult {
   let parsed: unknown;
 
@@ -187,7 +203,7 @@ function parseModelJson(outputText: string): ModelTaggingResult {
     );
   }
 
-  const cleaned: ModelTag[] = [];
+  const tokenTags: ModelTag[] = [];
 
   for (const item of tagsVal) {
     if (!isRecord(item)) continue;
@@ -203,20 +219,31 @@ function parseModelJson(outputText: string): ModelTaggingResult {
     // Clamp confidence defensively.
     const clampedConfidence = Math.max(0, Math.min(1, confidenceVal));
 
-    // Normalize tag name using frozen semantics.
-    const normalizedName = normalizeTagName(nameVal);
-    if (!normalizedName) continue;
+    /**
+     * ✅ The core: split the model name into normalized tokens.
+     * This automatically:
+     * - trims/collapses whitespace
+     * - lowercases ASCII
+     * - strips non-ASCII
+     * - strips punctuation
+     * - preserves inner hyphens
+     * - removes stopwords (DEFAULT_STOPWORDS)
+     * - dedupes within the phrase
+     */
+    const tokens = tokenizeQuery(nameVal);
 
-    cleaned.push({
-      name: normalizedName,
-      confidence: clampedConfidence,
-      kind: kindVal,
-    });
+    for (const tok of tokens) {
+      tokenTags.push({
+        name: tok,
+        confidence: clampedConfidence,
+        kind: kindVal,
+      });
+    }
   }
 
   // De-dupe by tag name, keep the highest confidence.
   const byName = new Map<string, ModelTag>();
-  for (const t of cleaned) {
+  for (const t of tokenTags) {
     const prev = byName.get(t.name);
     if (!prev || t.confidence > prev.confidence) {
       byName.set(t.name, t);
