@@ -3,12 +3,94 @@ import "~/styles/globals.css";
 import { type Metadata } from "next";
 import { Geist } from "next/font/google";
 
+import { env } from "~/env";
 import { TRPCReactProvider } from "~/trpc/react";
 
+/**
+ * Why we define a canonical base URL:
+ * - OpenGraph metadata (Discord/Twitter previews) works best with absolute URLs.
+ * - Next.js uses `metadataBase` to resolve relative URLs like "/og.png" into absolute ones.
+ * - In prod, this should be your real domain (e.g. https://pepefinder.com).
+ * - In local dev, it can be http://localhost:3000.
+ *
+ * IMPORTANT:
+ * - We are NOT reading process.env directly here (your project rule).
+ * - If you want this fully environment-driven, we should add NEXT_PUBLIC_APP_URL (or APP_URL)
+ *   to src/env.ts and import it here. For now, we use a safe default and you can replace it
+ *   once your domain is known.
+ */
+const METADATA_BASE = new URL(env.APP_URL);
+
 export const metadata: Metadata = {
-  title: "PepeFinder",
+  /**
+   * metadataBase tells Next.js how to turn relative URLs into absolute URLs.
+   * Example:
+   * - images: [{ url: "/og.png" }]
+   * becomes:
+   * - https://your-domain.com/og.png
+   */
+  metadataBase: METADATA_BASE,
+
+  /**
+   * Title can be either a string or an object.
+   * Using an object gives you a template for per-page titles later.
+   * - default: used when a page does not override title
+   * - template: used when a page provides a title (e.g. "Search")
+   */
+  title: {
+    default: "PepeFinder",
+    template: "%s | PepeFinder",
+  },
+
   description:
     "PepeFinder — an AI-tagged Pepe meme search engine with deterministic tag-overlap search.",
+
+  /**
+   * OpenGraph metadata:
+   * - used by Discord, Slack, Facebook, LinkedIn, etc.
+   * - provides the “link preview card” info.
+   */
+  openGraph: {
+    title: "PepeFinder",
+    description:
+      "PepeFinder — an AI-tagged Pepe meme search engine with deterministic tag-overlap search.",
+    /**
+     * url and siteName help some platforms render nicer previews.
+     * url should be the canonical homepage URL.
+     */
+    url: METADATA_BASE,
+    siteName: "PepeFinder",
+    /**
+     * images should be 1200x630 for best compatibility.
+     * Put og.png in /public/og.png
+     */
+    images: [
+      {
+        url: "/og.png",
+        width: 1200,
+        height: 630,
+        alt: "PepeFinder — AI-tagged Pepe meme search engine",
+      },
+    ],
+    /**
+     * locale/type are optional but help some consumers.
+     */
+    locale: "en_US",
+    type: "website",
+  },
+
+  /**
+   * Twitter Card metadata:
+   * - used by Twitter/X specifically
+   * - summary_large_image is the most “modern” large preview card
+   */
+  twitter: {
+    card: "summary_large_image",
+    title: "PepeFinder",
+    description:
+      "PepeFinder — an AI-tagged Pepe meme search engine with deterministic tag-overlap search.",
+    images: ["/og.png"],
+  },
 };
 
 const CONTACT_EMAIL = "herodotus9719@gmail.com";

@@ -8,6 +8,9 @@ export const env = createEnv({
       .enum(["development", "test", "production"])
       .default("development"),
 
+    // Canonical app URL used for OpenGraph/Twitter metadata.
+    APP_URL: z.string().url().optional().default("http://localhost:3000"),
+
     // Endpoint is required for S3-compatible providers (R2/MinIO/etc).
     S3_ENDPOINT: z.string().url().optional(),
 
@@ -83,6 +86,8 @@ export const env = createEnv({
     DATABASE_URL: process.env.DATABASE_URL,
     NODE_ENV: process.env.NODE_ENV,
     // NEXT_PUBLIC_CLIENTVAR: process.env.NEXT_PUBLIC_CLIENTVAR,
+
+    APP_URL: process.env.APP_URL,
 
     S3_ENDPOINT: process.env.S3_ENDPOINT,
     S3_REGION: process.env.S3_REGION,
