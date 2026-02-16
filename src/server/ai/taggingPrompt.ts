@@ -46,13 +46,54 @@ export const instruction = [
 
   // --- Tag list size + style (search primitives) ---
   "tags rules:",
-  "- Produce 25 to 60 tags total (not counting the caption).",
+  "- Produce 40 to 120 tags total (not counting the caption).",
   "- Prefer fewer tags over inventing uncertain ones to reach the count.",
   "- Each tag name must be 1–2 words (3 max only if truly necessary).",
   "- Prefer lowercase ASCII; avoid emojis; avoid punctuation except hyphens.",
   "- Do not include filler words like: very, kind of, maybe, looks like.",
   "- Do not output near-duplicate synonyms unless they refer to meaningfully different concepts.",
   `- Do not include stopwords as tags: "a", "an", "the".`,
+
+  // --------- Critical: how to expand safely ----------
+  "EXPANSION RULES (VERY IMPORTANT — follow exactly):",
+
+  // Base tags are the only “ground truth”.
+  "1) BASE TAGS (ground truth):",
+  "- First, identify 20 to 45 BASE tags that are directly visible or strongly implied by the pixels.",
+  "- BASE tags must be literal and specific (objects, emotions, actions, setting, style).",
+  "- Do not include abstract guesses.",
+
+  // Plural/singular pairing is deterministic and bounded.
+  "2) NOUN NUMBER PAIRS (singular/plural):",
+  "- For EACH BASE noun/object tag where English has a clear singular/plural form, include BOTH forms.",
+  '- Example: if you include "car", also include "cars". If you include "cars", also include "car".',
+  "- Do NOT do this for proper nouns or names (pepe, apustaja, homer).",
+  "- If unsure whether the pluralization is correct, omit the pair (keep only the base).",
+
+  // Verb pairing is also bounded.
+  "3) ACTION TENSE PAIRS (base vs present continuous):",
+  "- For EACH BASE action tag where English has a clear present-continuous form, include BOTH forms.",
+  '- Example: "cry" + "crying", "eat" + "eating", "run" + "running".',
+  "- Only do this for actions that are clearly occurring in the image.",
+  "- If unsure about spelling (e.g., doubling consonants), omit the pair (keep only the base).",
+
+  // Synonyms must be strict, limited, and grounded.
+  "4) SYNONYMS (strictly limited, grounded):",
+  "- For SOME BASE tags (only when very safe), add 1 to 3 STRICT synonyms.",
+  "- STRICT synonym means: interchangeable in search without changing meaning in this image context.",
+  "- Synonyms MUST be common, unambiguous, and directly supported by the image.",
+  "- Do NOT add broad related words or category words that reduce precision.",
+  '- BAD: "car" -> "transport", "ride" (too broad / not equivalent).',
+  '- GOOD: "car" -> "automobile", "vehicle" (common near-synonyms).',
+  "- If a tag is ambiguous, do not add synonyms.",
+  "- Never add more than 3 synonyms for any one base tag.",
+
+  // OCR: high value but must be legible only.
+  "5) TEXT EXTRACTION (OCR-like):",
+  "- If readable text exists, add tag: text. If green-on-black terminal style, also add: greentext.",
+  "- Transcribe ONLY clearly legible text. Do not guess missing characters.",
+  "- Add each transcribed WORD as its own tag.",
+  '- Example: "make love not war" => tags: "make","love","not","war".',
 
   // --- Confidence semantics (for display only; ranking ignores confidence) ---
   "confidence rules:",
@@ -78,20 +119,6 @@ export const instruction = [
   "- color: include simple color tags (red, blue, green, brown, black, white, yellow, pink, purple, orange, gray) only when clearly visible.",
   '- For color tags, prefer pairing with the corresponding object also being present in tags (e.g., include both "brown" and "chair" if a brown chair is clearly visible).',
   "- Consider that there is a difference between Pepe and Apustaja.",
-
-  /**
-   * Text extraction rule
-   */
-  "text rules (VERY IMPORTANT):",
-  '- If the image contains readable text, add tag "text".',
-  '- If the image is green-on-black terminal style, also add tag "greentext".',
-  "- Transcribe ALL LEGIBLE text exactly as it appears (do not guess missing letters).",
-  "- Add each transcribed WORD as its own tag (lowercase; punctuation removed).",
-  '- Example: sign says "make love not war" => add tags: "make", "love", "not", "war".',
-
-  // --- Important: do NOT try to satisfy stemming/tense requirements in prompt ---
-  "Important:",
-  "- Output the single most natural base form for actions.",
 
   // --- Final sanity constraints ---
   "Sanity checks before you respond:",
