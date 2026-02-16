@@ -77,7 +77,7 @@ export default function HomePage() {
                 name="q"
                 type="text"
                 required
-                placeholder="e.g. gun smiling sunglasses cool..."
+                placeholder="e.g. apustaja gun sunglasses smiling cool..."
                 className="min-w-0 flex-1 rounded-xl border border-gray-200 px-3 py-3 text-sm text-gray-900 shadow-sm outline-none placeholder:text-gray-400 focus:border-gray-300 sm:px-4"
                 // Defaulting autoComplete off keeps weird browser suggestions from dominating the MVP UI.
                 autoComplete="off"
