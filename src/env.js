@@ -2,30 +2,15 @@ import { createEnv } from "@t3-oss/env-nextjs";
 import { z } from "zod";
 
 export const env = createEnv({
-  /**
-   * Specify your server-side environment variables schema here. This way you can ensure the app
-   * isn't built with invalid env vars.
-   */
   server: {
     DATABASE_URL: z.string().url(),
     NODE_ENV: z
       .enum(["development", "test", "production"])
       .default("development"),
 
-    /**
-     * MVP1: S3-compatible object storage configuration.
-     *
-     * We keep these as server-only because:
-     * - access keys must never reach the browser
-     * - the request path (tRPC) will sign URLs and/or write objects
-     */
-
     // Endpoint is required for S3-compatible providers (R2/MinIO/etc).
-    // For AWS S3, you can still set it, but it’s often optional.
     S3_ENDPOINT: z.string().url().optional(),
 
-    // Region is required by the AWS SDK even for many S3-compatible providers.
-    // For R2/MinIO you can set a dummy like "auto" or "us-east-1" depending on provider docs.
     S3_REGION: z.string().min(1),
 
     // Credentials for the SDK client.
@@ -35,18 +20,7 @@ export const env = createEnv({
     // Bucket name where images are stored.
     S3_BUCKET: z.string().min(1),
 
-    /**
-     * Optional public base URL.
-     *
-     * If your bucket is public (or fronted by a CDN), set this and we can render
-     * images directly (fast, simple, great for search grids).
-     *
-     * Example:
-     * - https://<your-cdn-domain>
-     * - https://<bucket>.<provider-domain>
-     *
-     * If not set (private bucket), we will generate signed GET URLs for detail pages.
-     */
+    /// Optional public base URL.
     S3_PUBLIC_BASE_URL: z.string().url().optional(),
 
     /**
@@ -57,20 +31,11 @@ export const env = createEnv({
     TAGGING_PAUSED: z.enum(["true", "false"]).optional().default("false"),
 
     // Simple global cap: max completed jobs per UTC day.
-    // This is intentionally blunt for MVP1 to prevent runaway spending.
     TAGGING_DAILY_CAP: z.coerce.number().int().min(0).default(200),
 
-    // --- OpenAI (added in Step 12) ---
-    /**
-     * OPENAI_API_KEY is now OPTIONAL so `pnpm dev` can run without worker config.
-     *
-     * Why:
-     * - Next.js loads env at startup (via next.config imports).
-     * - We only need OpenAI secrets when the *worker* runs.
-     * - The request path must never call the model anyway.
-     *
-     * Enforcement will move to the worker (runtime check + fail-closed).
-     */
+    // --- OpenAI ---
+
+    // OPENAI_API_KEY is now OPTIONAL so `pnpm dev` can run without worker config.
     OPENAI_API_KEY: z.string().min(1).optional(), // Secret key used only inside the worker process.
     OPENAI_VISION_MODEL: z.string().min(1).optional().default("gpt-4.1-mini"), // Reasonable default vision-capable model.
     OPENAI_VISION_TIMEOUT_MS: z.coerce
@@ -80,24 +45,14 @@ export const env = createEnv({
       .max(60_000) // sanity ceiling: 60s max (prevents runaway hangs)
       .default(15_000),
 
-    /**
-     * MVP2: Reddit script authentication (manual batch only).
-     *
-     * We use the “script” app flow (username/password) because:
-     * - this is not a multi-user product feature
-     * - it is a manual operator script
-     * - we want the smallest moving parts
-     *
-     * You create a script app in Reddit prefs/apps, then use client id/secret + account creds.
-     */
+    // Reddit script authentication (manual batch only).
     REDDIT_CLIENT_ID: z.string().min(1).optional(),
     REDDIT_CLIENT_SECRET: z.string().min(1).optional(),
     REDDIT_USERNAME: z.string().min(1).optional(),
     REDDIT_PASSWORD: z.string().min(1).optional(),
 
     /**
-     * Reddit requires a descriptive User-Agent; generic ones get throttled harder.
-     * Use something like: "pepefinder:ingest:v1 (by u/yourname)"
+     * Reddit requires a descriptive User-Agent; generic ones get throttled harder. (e.g. "pepefinder:ingest:v1 (by u/username)")
      */
     REDDIT_USER_AGENT: z.string().min(1).optional(),
 
@@ -114,26 +69,16 @@ export const env = createEnv({
       .optional()
       .default(25),
 
-    // STEP 13 CHANGE: optional folder path containing your pre-scraped JSON files.
-    // Why optional:
-    // - keeps env validation from blocking dev if you don’t use the script
+    // Folder path containing pre-scraped JSON files.
+    // - keeps env validation from blocking dev if the script isn't used
     // - allows passing the folder as a CLI argument instead
     REDDIT_SCRAPE_DIR: z.string().min(1).optional(),
   },
 
-  /**
-   * Specify your client-side environment variables schema here. This way you can ensure the app
-   * isn't built with invalid env vars. To expose them to the client, prefix them with
-   * `NEXT_PUBLIC_`.
-   */
   client: {
     // NEXT_PUBLIC_CLIENTVAR: z.string(),
   },
 
-  /**
-   * You can't destruct `process.env` as a regular object in the Next.js edge runtimes (e.g.
-   * middlewares) or client-side so we need to destruct manually.
-   */
   runtimeEnv: {
     DATABASE_URL: process.env.DATABASE_URL,
     NODE_ENV: process.env.NODE_ENV,

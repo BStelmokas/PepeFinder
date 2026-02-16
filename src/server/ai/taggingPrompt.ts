@@ -118,7 +118,9 @@ export const instruction = [
   "- person: include the main character(s) (pepe, apustaja) and any obvious others (human, homer, penguin, etc.).",
   "- color: include simple color tags (red, blue, green, brown, black, white, yellow, pink, purple, orange, gray) only when clearly visible.",
   '- For color tags, prefer pairing with the corresponding object also being present in tags (e.g., include both "brown" and "chair" if a brown chair is clearly visible).',
-  "- Consider that there is a difference between Pepe and Apustaja.",
+  "- Consider that there is a difference between Pepe and Apustaja, make sure tags include the correct one.",
+  `- For images with multiple characters, describe their relationship within tags ("friendship", "date", "couple", "boyfriend and girlfriend", "team", etc.).`,
+  `- For images with female / feminine characters, note the gender component in the tags (especially use tags like "girl", "girlfriend", "female", "woman" where they fit).`,
 
   // --- Final sanity constraints ---
   "Sanity checks before you respond:",

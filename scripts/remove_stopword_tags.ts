@@ -2,16 +2,16 @@
  * One-off backfill: remove stopwords from existing tags.
  *
  * Why this exists:
- * - You already generated tags for ~5,000 images.
- * - Some tags contain stopwords like "a", "an", "the", "and" which add noise.
- * - We want to clean historical data without breaking referential integrity.
+ * - Sometimes tags may already exist in the DB that may be deemed unwanted
+ * - For example stopwords like "a", "an", "the", which add noise.
+ * - To clean historical data without breaking referential integrity.
  *
  * Safety properties:
  * - Idempotent: safe to run multiple times.
- * - Conflict-safe: we avoid duplicate (image_id, tag_id) rows by inserting with ON CONFLICT.
+ * - Conflict-safe: avoid duplicate (image_id, tag_id) rows by inserting with ON CONFLICT.
  *
  * Operational notes:
- * - Run this while the worker is stopped (recommended) to avoid races.
+ * - Better to run this while the worker is stopped (recommended) to avoid races.
  * - This does NOT change images; it only adjusts tags + image_tags.
  */
 
@@ -21,10 +21,6 @@ import { imageTags, tags } from "~/server/db/schema";
 
 /**
  * Small, hardcoded stopword list.
- *
- * We keep it tiny on purpose:
- * - We only remove words that are almost always noise for this meme-search use case.
- * - We avoid removing words that might matter (e.g., "no", "not", "vs") without thinking.
  */
 const STOPWORDS = ["a", "an", "the"] as const;
 

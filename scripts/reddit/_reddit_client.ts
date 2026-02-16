@@ -1,9 +1,9 @@
 /**
  * Minimal Reddit API client for manual batch ingestion scripts.
  *
- * We intentionally do NOT turn this into a “service”:
- * - It’s only used by offline scripts (MVP2 constraint).
- * - We keep it tiny to avoid “crawler infra” creep.
+ * This is intentionally not a service:
+ * - It’s only used by offline scripts.
+ * - Keep it tiny to avoid “crawler infra” creep.
  *
  * Auth model:
  * - Script app OAuth token via /api/v1/access_token
@@ -13,11 +13,7 @@
 import { env } from "~/env";
 
 /**
- * Helper to enforce that a value exists at the moment we actually need it.
- *
- * Why this exists:
- * - We made Reddit env vars optional globally so Drizzle/dev can run.
- * - But scripts still need strictness, so we fail here with a clear message.
+ * Helper to enforce that a value exists at the moment it's needed.
  */
 function requireEnv(name: string, value: string | undefined): string {
   if (!value) {
@@ -80,23 +76,22 @@ export async function redditGetAccessToken(): Promise<string> {
 }
 
 /**
- * Minimal subset of listing post fields we care about.
- * We keep this small on purpose.
+ * Minimal subset of listing post fields.
  */
 export type RedditPost = {
   id: string; // base36 post id (e.g., "abc123")
-  permalink: string; // "/r/sub/comments/..."
-  subreddit: string; // subreddit name
-  url: string; // direct destination URL (often image URL for image posts)
-  title: string; // useful for logs/debug
-  is_self: boolean; // indicates text post; we skip those
+  permalink: string;
+  subreddit: string;
+  url: string;
+  title: string;
+  is_self: boolean; // indicates text post; skip those
   post_hint?: string; // "image" for many image posts
 };
 
 /**
  * Fetch posts from a subreddit listing endpoint.
  *
- * We support:
+ * Supported:
  * - /new
  * - /top (optionally with t=day/week/month/year/all)
  */

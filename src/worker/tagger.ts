@@ -1,26 +1,17 @@
 /**
- * PepeFinder Tagging Worker (Step 11)
+ * Tagging Worker
  *
- * This is a separate Node process that you run alongside the web app:
+ * This is a script that in the future will be a long-lived separate Node process that will be run alongside the web app:
  * - `pnpm worker:tagger`
  *
- * Why a separate process?
- * - Worker-only model calls is a hard invariant (cost safety).
- * - We want the web server to remain responsive even if tagging is slow or failing.
- *
  * Why Postgres as the queue?
- * - MVP constraint: no Redis, no external queue.
- * - Postgres row-level locking + SKIP LOCKED gives us safe job claiming with minimal infra.
+ * - Simplicity constraint: no Redis, no external queue.
+ * - Postgres row-level locking + SKIP LOCKED gives safe job claiming with minimal infra.
  *
  * Fail-closed safety:
  * - If TAGGING_PAUSED=true → worker does nothing (search stays live).
  * - If TAGGING_DAILY_CAP reached → worker does nothing (search stays live).
  * - If errors occur → mark image failed + job failed, store last_error.
- *
- * Placeholder tagger:
- * - For now we generate deterministic tags (no AI calls).
- * - We structure code so replacing with a real vision model later is a one-function change:
- *   replace `runTagger()` implementation only.
  */
 
 import { sql } from "drizzle-orm";
@@ -32,7 +23,7 @@ import { tagImageWithOpenAI } from "~/server/ai/openai-vision-tagger";
 import { resolveImageUrlForModel } from "~/server/storage/resolve-image-url";
 
 /**
- * Small sleep helper so we can “poll” the DB without busy-waiting.
+ * Small sleep helper so the DB can be polled without busy-waiting.
  */
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -40,9 +31,6 @@ function sleep(ms: number): Promise<void> {
 
 /**
  * A minimal “tag suggestion” structure.
- * This mirrors what a real model would eventually return:
- * - a tag string
- * - a confidence 0..1
  */
 type TagSuggestion = {
   name: string;

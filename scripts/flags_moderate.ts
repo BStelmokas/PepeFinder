@@ -1,6 +1,4 @@
 /**
- * flags_moderate.ts
- *
  * Operator-only moderation script:
  * - Unlist or delete images that exceed a specified flag_count threshold.
  *
@@ -14,8 +12,8 @@
  * - Supports --dry-run to preview exactly what would happen.
  *
  * What “unlist” means in PepeFinder:
- * - We set images.status = "failed"
- * - Your search path only shows status="indexed"
+ * - Set images.status = "failed"
+ * - Search path only shows status="indexed"
  * - So the image disappears from search results, but remains reachable by /image/[id]
  *
  * What “delete” means:
@@ -30,16 +28,16 @@
  *   pnpm flags:moderate -- --mode=delete --min=10
  */
 
-import { db } from "~/server/db"; // Single DB instance (per your rules).
-import { images } from "~/server/db/schema"; // Images table.
-import { and, eq, gte, sql } from "drizzle-orm"; // Typed query builders.
-import { deleteObject } from "~/server/storage/s3"; // Best-effort object deletion (server-only).
+import { db } from "~/server/db";
+import { images } from "~/server/db/schema";
+import { and, eq, gte, sql } from "drizzle-orm";
+import { deleteObject } from "~/server/storage/s3";
 
 type Mode = "unlist" | "delete";
 
 function parseArgs(argv: string[]) {
   /**
-   * Minimal argv parsing with no deps (per your constraints).
+   * Minimal argv parsing.
    *
    * Supported flags:
    * - --mode=unlist|delete
@@ -53,8 +51,7 @@ function parseArgs(argv: string[]) {
   };
 
   for (const arg of argv) {
-    // FIX: ignore the conventional flag terminator if it appears in argv.
-    // This is what caused your "Unknown argument: --" crash.
+    // Ignore the conventional flag terminator if it appears in argv.
     if (arg === "--") {
       continue;
     }
@@ -78,7 +75,7 @@ function parseArgs(argv: string[]) {
     }
   }
 
-  // Safety invariant from you: threshold must be >= 1.
+  // Safety invariant.
   if (out.min < 1) {
     throw new Error(`--min must be >= 1 (safety guard). Received: ${out.min}`);
   }
@@ -87,11 +84,10 @@ function parseArgs(argv: string[]) {
 }
 
 /**
- * Determine whether storageKey looks like an S3 object key we can delete.
+ * Determine whether storageKey looks like an S3 object key that can be deleted.
  *
- * We treat:
- * - "images/foo.jpg" as deletable
- * and treat:
+ * - "images/foo.jpg" are treated as deletable
+ * and:
  * - "https://..." as NOT deletable via S3 deleteObject (because it's not a key)
  */
 function isObjectKey(storageKey: string): boolean {
@@ -109,10 +105,7 @@ async function main(): Promise<void> {
   console.log(`dry_run=${dryRun}`);
 
   /**
-   * Step 1: fetch candidate images.
-   *
-   * We include storageKey because delete mode may attempt object deletion.
-   * We include status so you can see whether we’re changing anything.
+   * Fetch candidate images.
    */
   const candidates = await db
     .select({
@@ -134,8 +127,7 @@ async function main(): Promise<void> {
   }
 
   /**
-   * Step 2: print a preview table (operator-friendly).
-   * (We keep it small to avoid spamming terminal.)
+   * Print a preview table (operator-friendly).
    */
   for (const c of candidates.slice(0, 25)) {
     const name = c.caption?.trim() ? c.caption.trim() : `#${c.id}`;
@@ -153,18 +145,6 @@ async function main(): Promise<void> {
   }
 
   if (mode === "unlist") {
-    /**
-     * Unlist = status -> "failed"
-     *
-     * Why "failed"?
-     * - Your search router hides status != "indexed"
-     * - Your image detail page still shows it by ID
-     * - This uses your existing lifecycle enum without adding a new one ("removed")
-     *
-     * NOTE:
-     * - We only update images that are currently indexed,
-     *   so we don't rewrite rows unnecessarily.
-     */
     const ids = candidates.map((c) => c.id);
 
     const updated = await db
@@ -181,15 +161,6 @@ async function main(): Promise<void> {
   }
 
   if (mode === "delete") {
-    /**
-     * Delete mode:
-     * - Best-effort delete objects (only if storageKey is a key)
-     * - Delete DB row (cascade deletes joins/jobs)
-     *
-     * IMPORTANT:
-     * - DB is the authoritative index for search.
-     * - If object deletion fails, we still remove DB row to prevent it from appearing.
-     */
     let deletedObjects = 0;
     let deletedRows = 0;
     let objectDeleteFailures = 0;
@@ -201,7 +172,7 @@ async function main(): Promise<void> {
           deletedObjects++;
         } catch (err) {
           objectDeleteFailures++;
-          // Fail-soft: we still proceed to delete DB row.
+          // Fail-soft: still proceed to delete DB row.
           const msg = err instanceof Error ? err.message : String(err);
           console.warn(
             `warn: failed to delete object key="${c.storageKey}" id=${c.id}: ${msg}`,
@@ -230,13 +201,10 @@ async function main(): Promise<void> {
 
 /**
  * Helper: build a safe "id IN (...)" clause without pulling in extra deps.
- *
- * Drizzle has inArray, but we want to keep this fully typed for ids.
- * We'll implement a small helper using sql fragments to avoid giant query builders.
  */
 function inArrayIds(ids: number[]) {
   if (ids.length === 0) {
-    // This should never happen in our usage, but keep it safe.
+    // This should never happen in usage, but keep it safe.
     return sql`FALSE`;
   }
 

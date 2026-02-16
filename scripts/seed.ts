@@ -1,30 +1,24 @@
 /**
- * PepeFinder MVP0 — One-off seed script (idempotent)
+ * One-off seed script (idempotent)
  *
- * Why this exists (architecture, not “just a script”):
- * - MVP0 requires a manually seeded dataset (50–200 images).
- * - This must NOT become a product feature:
+ * Why this exists:
+ * - MVP requires a manually seeded dataset (50–200 images).
+ * - This is NOT a product feature:
  *   - no UI
  *   - no uploads
  *   - no API routes
- * - It *is* an internal operator tool: repeatable, safe to re-run, and boring.
  *
- * Key invariants we enforce:
- * - Uses the single Drizzle db singleton from `src/server/db.ts` (non-negotiable).
+ * Key invariants enforced:
+ * - Uses the single Drizzle db singleton from `src/server/db.ts`.
  * - Idempotent re-runs using DB uniqueness:
  *   - images.sha256 is unique
  *   - tags.name is unique
  *   - image_tags has composite PK (image_id, tag_id)
- * - Tag normalization matches frozen query semantics via our pure module.
+ * - Tag normalization matches frozen query semantics via the pure module.
  *
- * Storage model for MVP0:
- * - We copy files into `public/seed/` (served by Next.js dev server as `/seed/<file>`).
- * - We store `storageKey` in DB as `/seed/<file>`.
- *
- * Why copy into `public/` instead of using file:// paths?
- * - Browsers won’t reliably render arbitrary local file paths in <img src="...">.
- * - Next.js can serve public assets consistently in dev and prod.
- * - This keeps UI behavior predictable while we’re still pre-S3.
+ * Storage model for MVP:
+ * - Copy files into `public/seed/` (served by Next.js dev server as `/seed/<file>`).
+ * - Store `storageKey` in DB as `/seed/<file>`.
  *
  * How to run:
  * - Set SEED_DIR to the folder containing:
@@ -37,17 +31,16 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 
-import { db } from "~/server/db"; // Required: singleton DB instance (do not instantiate elsewhere).
-import { imageTags, images, tags } from "~/server/db/schema"; // DB schema tables (typed).
-import { normalizeTagName } from "~/lib/text/normalize"; // Frozen tag normalization (must match query semantics).
-import { eq } from "drizzle-orm"; // Typed SQL operator for lookups.
+import { db } from "~/server/db";
+import { imageTags, images, tags } from "~/server/db/schema";
+import { normalizeTagName } from "~/lib/text/normalize";
+import { eq } from "drizzle-orm";
 
 /**
- * The manifest shape you described.
+ * The manifest shape.
  *
- * We keep the type tiny and explicit:
- * - We only parse what we need.
- * - Validation is done with a light runtime check below (no new deps).
+ * Keep the type tiny and explicit:
+ * - Only parse what's needed.
  */
 type SeedManifest = {
   images: Array<{
@@ -58,11 +51,6 @@ type SeedManifest = {
 
 /**
  * Compute SHA-256 (hex) for a file buffer.
- *
- * Why SHA-256?
- * - Stable fingerprint for dedupe.
- * - Cheap at this dataset size.
- * - Becomes a first-class primitive for MVP1 uploads.
  */
 function sha256Hex(buf: Buffer): string {
   return crypto.createHash("sha256").update(buf).digest("hex");
@@ -70,10 +58,6 @@ function sha256Hex(buf: Buffer): string {
 
 /**
  * Read and parse seed.json from a directory.
- *
- * We do minimal validation (without new deps) because:
- * - This is an operator script, not a public boundary.
- * - But we still want good errors if the JSON is malformed.
  */
 function readManifest(seedDir: string): SeedManifest {
   const manifestPath = path.join(seedDir, "seed.json");
@@ -88,7 +72,7 @@ function readManifest(seedDir: string): SeedManifest {
   const raw = fs.readFileSync(manifestPath, "utf8");
   const parsed = JSON.parse(raw) as unknown;
 
-  // Tiny runtime shape check: enough to avoid confusing failures later.
+  // Tiny runtime shape check
   if (
     !parsed ||
     typeof parsed !== "object" ||
@@ -105,10 +89,6 @@ function readManifest(seedDir: string): SeedManifest {
 
 /**
  * Ensure `public/seed` exists and return its absolute path.
- *
- * Why:
- * - Next.js serves `public/**` at the site root.
- * - So `public/seed/apu-hat.png` becomes `/seed/apu-hat.png`.
  */
 function ensurePublicSeedDir(projectRoot: string): string {
   const publicSeedDir = path.join(projectRoot, "public", "seed");
@@ -122,12 +102,6 @@ function ensurePublicSeedDir(projectRoot: string): string {
 
 /**
  * Copy an image into `public/seed/` if missing.
- *
- * Idempotency:
- * - If the destination file already exists, we do not overwrite it.
- * - In early MVP0 we prefer “do not surprise me” over “sync every run”.
- *
- * Later, if you want strict syncing, you can compare hashes and overwrite if changed.
  */
 function copyToPublicSeedIfMissing(sourcePath: string, destPath: string): void {
   if (fs.existsSync(destPath)) {
@@ -141,11 +115,6 @@ function copyToPublicSeedIfMissing(sourcePath: string, destPath: string): void {
  * Upsert-like helper for images:
  * - Try insert (unique on sha256 + storageKey).
  * - If it already exists, fetch its id.
- *
- * Why not a true SQL UPSERT with RETURNING?
- * - Drizzle supports onConflict behaviors, but “return the existing row id on conflict”
- *   is not consistently ergonomic across all Drizzle versions/configs.
- * - This two-step approach is simple, explicit, and perfectly fine at seed scale (50–200 rows).
  */
 async function getOrCreateImage(args: {
   storageKey: string;
@@ -170,7 +139,7 @@ async function getOrCreateImage(args: {
 
   if (inserted.length > 0) return inserted[0]!.id;
 
-  // 2) If not inserted, fetch existing by sha256 (our strongest dedupe key).
+  // 2) If not inserted, fetch existing by sha256 (the strongest dedupe key).
   const existing = await db
     .select({ id: images.id })
     .from(images)
@@ -179,7 +148,7 @@ async function getOrCreateImage(args: {
 
   if (existing.length === 0) {
     // This should be impossible if the uniqueness constraints are working.
-    // We throw loudly because silent corruption is worse than a failed seed run.
+    // Throw loudly because silent corruption is worse than a failed seed run.
     throw new Error(
       `Image insert conflicted but existing row not found (sha256=${args.sha256}).`,
     );
@@ -198,8 +167,8 @@ async function getOrCreateTagId(rawTag: string): Promise<number | null> {
   // Normalize exactly once here so seed tags match query token semantics forever.
   const normalized = normalizeTagName(rawTag);
 
-  // If normalization yields null, this tag is invalid under our frozen rules.
-  // We skip it rather than failing the entire seed run.
+  // If normalization yields null, this tag is invalid under the frozen rules.
+  // Skip it rather than failing the entire seed run.
   if (!normalized) return null;
 
   // Attempt insert (unique on tags.name).
@@ -218,7 +187,7 @@ async function getOrCreateTagId(rawTag: string): Promise<number | null> {
     .where(eq(tags.name, normalized))
     .limit(1);
 
-  // Like images: this should be impossible unless constraints are broken.
+  // This should be impossible unless constraints are broken.
   if (existing.length === 0) {
     throw new Error(
       `Tag insert conflicted but existing row not found (name=${normalized}).`,
@@ -230,10 +199,6 @@ async function getOrCreateTagId(rawTag: string): Promise<number | null> {
 
 /**
  * Main seed routine.
- *
- * We keep this sequential and simple:
- * - 50 images is tiny
- * - clarity > clever concurrency here
  */
 async function main(): Promise<void> {
   // Operator-provided directory containing seed.json and images.
@@ -258,7 +223,7 @@ async function main(): Promise<void> {
   // Read and validate the manifest.
   const manifest = readManifest(resolvedSeedDir);
 
-  // Ensure our public seed directory exists for serving images.
+  // Ensure the public seed directory exists for serving images.
   const publicSeedDir = ensurePublicSeedDir(projectRoot);
 
   console.log(`Seeding from: ${resolvedSeedDir}`);
@@ -291,7 +256,7 @@ async function main(): Promise<void> {
     const destPath = path.join(publicSeedDir, item.file);
     copyToPublicSeedIfMissing(sourcePath, destPath);
 
-    // The URL path we store in DB and render directly in <img src="...">.
+    // The URL path stored in DB and rendered directly in <img src="...">.
     const storageKey = `/seed/${item.file}`;
 
     // Insert (or fetch) the image row.
@@ -317,8 +282,7 @@ async function main(): Promise<void> {
         .values({
           imageId,
           tagId,
-          // Seeded tags are “ground truth” from your manifest, so we use 1.0.
-          // Later, worker tagging will produce real probabilities.
+          // Later, worker tagging will produce real probabilities:
           confidence: 1,
         })
         .onConflictDoNothing()

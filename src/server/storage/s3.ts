@@ -5,14 +5,6 @@
  * - Provide a tiny, explicit interface for:
  *   - presigned PUT (client uploads directly to S3)
  *   - presigned GET (rendering private objects if needed)
- *
- * Why an adapter module?
- * - Keeps AWS SDK details out of tRPC routers (thin procedures, clear layering).
- * - Makes it easy to replace storage later (or add a mock for tests) without
- *   rewriting business logic.
- *
- * IMPORTANT:
- * - This module is server-only. It must never be imported by Client Components.
  */
 
 import {
@@ -27,14 +19,6 @@ import { env } from "~/env";
 
 /**
  * S3 client singleton.
- *
- * Why singleton?
- * - The AWS SDK client holds connection pooling and configuration.
- * - Creating a new client per request is wasteful and can cause perf issues.
- *
- * Note:
- * - In serverless (Vercel), “singleton” means “per warm lambda instance”.
- *   That’s still beneficial: warm instances can reuse connections.
  */
 const s3 = new S3Client({
   region: env.S3_REGION,

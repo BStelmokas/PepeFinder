@@ -1,14 +1,10 @@
 /**
- * MVP2 — Reddit takedown helper (manual).
+ * Reddit takedown helper (manual).
  *
  * Goal:
  * - Remove an ingested image by reddit post_id (sourceRef).
  * - Optionally delete the S3 object.
  * - Delete the images row (cascades to image_tags + tag_jobs via FK onDelete: cascade).
- *
- * Why this matters:
- * - Takedown readiness is a core compliance/ethics feature.
- * - You want a deterministic way to remove content by its source ID.
  */
 
 import { env } from "~/env";
@@ -24,10 +20,10 @@ import { sql } from "drizzle-orm";
  * - full public URL (S3_PUBLIC_BASE_URL + key)
  * - raw object key (e.g., "images/reddit/<sha>.jpg")
  *
- * If we cannot derive, we skip object deletion (still delete DB row).
+ * If cannot derive, skip object deletion (still delete DB row).
  */
 function deriveObjectKey(storageKey: string): string | null {
-  // If it’s an object key (no scheme, no leading slash), we assume it is already the key.
+  // If it’s an object key (no scheme, no leading slash), assume it is already the key.
   if (
     !storageKey.startsWith("http://") &&
     !storageKey.startsWith("https://") &&
@@ -36,7 +32,7 @@ function deriveObjectKey(storageKey: string): string | null {
     return storageKey;
   }
 
-  // If it’s a public URL and we know the base, strip it.
+  // If it’s a public URL and the base is known, strip it.
   if (storageKey.startsWith("http://") || storageKey.startsWith("https://")) {
     if (!env.S3_PUBLIC_BASE_URL) return null;
 

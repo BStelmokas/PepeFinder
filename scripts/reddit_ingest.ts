@@ -1,5 +1,5 @@
 /**
- * MVP2 — Reddit ingestion script (manual batch only).
+ * Reddit ingestion script (manual batch only).
  *
  * Goals:
  * - Fetch a fixed number of posts from ONE subreddit.
@@ -14,8 +14,8 @@
  *   - If TAGGING_PAUSED=true -> do NOT enqueue jobs
  *   - If daily cap reached -> enqueue only up to remaining budget
  *
- * Important: this is NOT crawler infra.
- * - It only runs when you execute it.
+ * Important: this is not crawler infra.
+ * - It only runs when executed.
  * - It has a hard limit per run.
  */
 
@@ -27,21 +27,11 @@ import { putObject, publicUrlForKey } from "~/server/storage/s3";
 import {
   redditFetchListing,
   redditGetAccessToken,
-  type RedditPost,
 } from "./reddit/_reddit_client";
 import { eq, sql } from "drizzle-orm";
 
 /**
  * Tiny helper to make “optional env” become “required at runtime for this script”.
- *
- * Why redefine here instead of importing?
- * - Professional layering: the ingestion script also has non-Reddit network calls (image download)
- *   that benefit from having a guaranteed User-Agent.
- * - We keep this helper microscopic and local to avoid creating a “shared utils” module prematurely.
- *
- * Alternative:
- * - Move this to scripts/_utils/require_env.ts and import it everywhere.
- *   That becomes worthwhile once multiple scripts need it.
  */
 function requireEnv(name: string, value: string | undefined): string {
   if (!value) {
@@ -54,7 +44,7 @@ function requireEnv(name: string, value: string | undefined): string {
 
 /**
  * Supported image types for ingestion.
- * We keep it strict to avoid accidental ingestion of videos/gifs/unknown formats.
+ * Keep it strict to avoid accidental ingestion of videos/gifs/unknown formats.
  */
 const ALLOWED_EXT = new Set(["jpg", "jpeg", "png", "webp"]);
 const ALLOWED_CONTENT_TYPES = new Set([
@@ -64,8 +54,8 @@ const ALLOWED_CONTENT_TYPES = new Set([
 ]);
 
 /**
- * Convert a URL to a file extension we accept.
- * We use URL pathname, not querystring.
+ * Convert a URL to a file extension that is accepted.
+ * Use URL pathname, not querystring.
  */
 function extFromUrl(url: string): string | null {
   try {
@@ -82,7 +72,7 @@ function extFromUrl(url: string): string | null {
 
 /**
  * Compute SHA-256 hex from bytes.
- * This is our dedupe key and also our deterministic storage key.
+ * This is the dedupe key and also the deterministic storage key.
  */
 function sha256Hex(bytes: Uint8Array): string {
   return crypto.createHash("sha256").update(bytes).digest("hex");
@@ -90,7 +80,7 @@ function sha256Hex(bytes: Uint8Array): string {
 
 /**
  * Count jobs done today (UTC-ish) to enforce remaining cap for enqueuing.
- * We intentionally reuse the worker’s cap concept, but enforce it *early* here
+ * Intentionally reuse the worker’s cap concept, but enforce it *early* here
  * to avoid an unbounded queue buildup.
  */
 async function countDoneJobsToday(): Promise<number> {
@@ -119,8 +109,8 @@ async function enqueueJob(imageId: number): Promise<void> {
  * Download an image URL into bytes, validating content-type.
  *
  * Safety notes:
- * - We enforce size cap to prevent huge downloads.
- * - We enforce content-type to match supported formats.
+ * - Enforce size cap to prevent huge downloads.
+ * - Enforce content-type to match supported formats.
  */
 async function downloadImageBytes(params: {
   url: string;
@@ -132,7 +122,7 @@ async function downloadImageBytes(params: {
   const res = await fetch(params.url, {
     method: "GET",
     headers: {
-      // A good practice: set user-agent. Some CDNs block empty UA.
+      // Set user-agent. Some CDNs block empty UA.
       "User-Agent": params.userAgent,
     },
   });
@@ -150,8 +140,7 @@ async function downloadImageBytes(params: {
     throw new Error(`Unsupported content-type: ${contentType || "unknown"}`);
   }
 
-  // Hard limit download size (MVP safety).
-  // If you want this configurable later, add env var.
+  // Hard limit download size (safety).
   const maxBytes = 8 * 1024 * 1024;
 
   const buf = new Uint8Array(await res.arrayBuffer());
@@ -177,9 +166,9 @@ async function main(): Promise<void> {
   );
 
   /**
-   * We require REDDIT_USER_AGENT here because:
-   * - we use it for Reddit API calls (handled inside _reddit_client)
-   * - we ALSO use it for downstream image downloads (this script)
+   * Require REDDIT_USER_AGENT here because:
+   * - it's used for Reddit API calls (handled inside _reddit_client)
+   * - it's also used for downstream image downloads (this script)
    */
   const userAgent = requireEnv("REDDIT_USER_AGENT", env.REDDIT_USER_AGENT);
 
@@ -190,7 +179,6 @@ async function main(): Promise<void> {
     subreddit: env.REDDIT_SUBREDDIT,
     sort: env.REDDIT_SORT,
     limit: env.REDDIT_LIMIT,
-    // For "top" we can extend this script later to accept env.REDDIT_TIME
   });
 
   console.log(`Fetched ${posts.length} posts from Reddit.`);
@@ -199,8 +187,8 @@ async function main(): Promise<void> {
   const doneToday = await countDoneJobsToday();
   const remainingBudget = Math.max(0, env.TAGGING_DAILY_CAP - doneToday);
 
-  // If tagging is paused, we still ingest images (corpus growth),
-  // but we skip enqueuing jobs (no paid usage).
+  // If tagging is paused, still ingest images (corpus growth),
+  // but skip enqueuing jobs (no paid usage).
   const enqueueAllowed = env.TAGGING_PAUSED !== "true" && remainingBudget > 0;
 
   console.log(
@@ -256,11 +244,6 @@ async function main(): Promise<void> {
         .limit(1);
 
       if (existingBySha.length > 0) {
-        // We intentionally do NOT rewrite attribution on an existing image:
-        // - avoids “ownership confusion” (one image might be posted in multiple places)
-        // - keeps the rule simple and deterministic
-        //
-        // If you want “multi-source references” later, that’s a new table (out of MVP2 scope).
         skipped++;
         continue;
       }
@@ -308,7 +291,7 @@ async function main(): Promise<void> {
         `Ingested post_id=${post.id} sha=${sha.slice(0, 8)}… image_id=${imageId} enqueued=${enqueueAllowed && enqueued <= remainingBudget}`,
       );
     } catch (e) {
-      // We fail soft per-post so one bad URL doesn’t break the whole batch.
+      // Fail soft per-post so one bad URL doesn’t break the whole batch.
       const msg = e instanceof Error ? e.message : String(e);
       console.warn(`Skip post_id=${post.id} url=${post.url} reason=${msg}`);
       skipped++;

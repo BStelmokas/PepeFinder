@@ -1,15 +1,14 @@
 /**
- * MVP2 — Reddit ingestion from pre-scraped JSON files (manual batch only).
+ * Reddit ingestion from pre-scraped JSON files (manual batch only).
  *
  * Why this exists:
- * - You already scraped URLs in the past (offline).
- * - Reddit API/OAuth can be annoying or blocked.
- * - We still want a clean, idempotent, takedown-ready ingestion path.
+ * - I used an alternative way to scrape the images since Reddit gated the API.
+ * - A a clean, idempotent, takedown-ready ingestion path is still wanted.
  *
  * What this script does:
  * 1) Reads all .json files in a folder
  * 2) Extracts `{ url: string }` entries
- * 3) Filters to "likely direct image URLs" (we ignore non-images)
+ * 3) Filters to "likely direct image URLs" (ignore non-images)
  * 4) Downloads the bytes (server-side)
  * 5) Computes SHA-256 for dedupe + deterministic object keys
  * 6) Uploads to S3
@@ -24,22 +23,22 @@
  * - No model calls here
  */
 
-import fs from "node:fs/promises"; // Node stdlib: read directory + files without extra deps.
-import path from "node:path"; // Node stdlib: path joins, safe cross-platform-ish behavior.
-import crypto from "node:crypto"; // Node stdlib: SHA-256 hashing.
-import { env } from "~/env"; // Validated env access (only sourced from src/env.ts).
-import { db } from "~/server/db"; // Singleton Drizzle db instance (no new db creation).
-import { images, tagJobs } from "~/server/db/schema"; // DB tables we insert into.
-import { putObject, publicUrlForKey } from "~/server/storage/s3"; // Central S3 adapter.
-import { eq, sql } from "drizzle-orm"; // Drizzle helpers for conditions + raw SQL where useful.
+import fs from "node:fs/promises";
+import path from "node:path";
+import crypto from "node:crypto";
+import { env } from "~/env";
+import { db } from "~/server/db";
+import { images, tagJobs } from "~/server/db/schema";
+import { putObject, publicUrlForKey } from "~/server/storage/s3";
+import { eq, sql } from "drizzle-orm";
 
 /**
- * Types: matches your scraped JSON format.
+ * Types: matches the scraped JSON format.
  */
 type ScrapedEntry = { url: string };
 
 /**
- * We only ingest these extensions (strict).
+ * Only ingest these extensions (strict).
  * Why strict:
  * - avoids accidentally ingesting videos, HTML pages, etc.
  * - keeps downloads smaller and predictable
@@ -47,7 +46,7 @@ type ScrapedEntry = { url: string };
 const ALLOWED_EXT = new Set(["jpg", "jpeg", "png", "webp"]);
 
 /**
- * We verify content-type after download to prevent "url says .jpg but it's HTML".
+ * Verify content-type after download to prevent "url says .jpg but it's HTML".
  * This blocks a common scraping failure mode.
  */
 const ALLOWED_CONTENT_TYPES = new Set([
@@ -64,13 +63,8 @@ const MAX_DOWNLOAD_BYTES = 8 * 1024 * 1024;
 
 /**
  * Safety cap: max number of URLs processed per run.
- * This is critical because you said you have 8–9k links.
  *
- * STEP 13 CHANGE: We default to 250 per run (operator can override via CLI).
- * Why:
- * - keeps runs short and debuggable
- * - prevents unbounded spend/queue buildup
- * - matches MVP “manual batch” spirit
+ * Default to 250 per run.
  */
 const DEFAULT_MAX_PER_RUN = 250;
 
@@ -93,11 +87,10 @@ function extFromUrl(url: string): string | null {
 /**
  * Decide whether a URL is worth attempting.
  *
- * STEP 13 CHANGE: We restrict to “direct image” hosts by default.
- * - i.redd.it and preview.redd.it are common for direct Reddit-hosted images
- * - You can extend this list later if your scrape includes other known-good image hosts
+ * Restrict to “direct image” hosts by default.
+ * - i.redd.it is for Reddit-hosted images
  *
- * Why host filtering helps:
+ * Why:
  * - avoids wasting time on "tessprint7.com" or YouTube links
  * - reduces bad downloads, timeouts, and HTML masquerading as images
  */
@@ -109,8 +102,6 @@ function isLikelyDirectImageUrl(url: string): boolean {
 
     if (!ext) return false;
 
-    // STEP 13 CHANGE: restrict to reddit image hosts for a clean MVP2 pass.
-    // You can broaden this later by adding known-good direct image CDNs.
     return host === "i.redd.it";
   } catch {
     return false;
@@ -119,7 +110,7 @@ function isLikelyDirectImageUrl(url: string): boolean {
 
 /**
  * Compute SHA-256 hex digest from bytes.
- * This is our primary dedupe key and deterministic storage identity.
+ * This is the primary dedupe key and deterministic storage identity.
  */
 function sha256Hex(bytes: Uint8Array): string {
   return crypto.createHash("sha256").update(bytes).digest("hex");
@@ -128,7 +119,7 @@ function sha256Hex(bytes: Uint8Array): string {
 /**
  * Idempotent job enqueue:
  * - unique(image_id) ensures no duplicates
- * - we never call the model here
+ * - never call the model here
  */
 async function enqueueJob(imageId: number): Promise<void> {
   await db
@@ -146,7 +137,7 @@ async function downloadImageBytes(
   const headers: Record<string, string> = {};
 
   // If env var is present, include it. If not, omit the header entirely.
-  // (In your env.ts we validate REDDIT_USER_AGENT as required, but this is still defensive.)
+  // (In env.ts REDDIT_USER_AGENT is validated as required, but this is still defensive.)
   if (env.REDDIT_USER_AGENT) {
     headers["User-Agent"] = env.REDDIT_USER_AGENT;
   }
@@ -164,7 +155,7 @@ async function downloadImageBytes(
     res.headers.get("content-type")?.split(";")[0]?.trim() ?? "";
 
   if (!ALLOWED_CONTENT_TYPES.has(contentType)) {
-    // If this triggers a lot, it’s a sign you’re hitting HTML pages or non-images.
+    // If this triggers a lot, it’s a sign the script is hitting HTML pages or non-images.
     throw new Error(`Unsupported content-type: ${contentType || "unknown"}`);
   }
 
@@ -255,7 +246,7 @@ async function main(): Promise<void> {
 
   const allUrls = await readUrlsFromFolder(folder);
 
-  // STEP 13 CHANGE: De-dupe URLs early to avoid repeated work across 5 files.
+  // De-dupe URLs early to avoid repeated work across 5 files.
   const uniqueUrls = Array.from(new Set(allUrls));
 
   // Filter down to likely direct image URLs (host + extension).
@@ -268,12 +259,6 @@ async function main(): Promise<void> {
   // Cap the run to maxPerRun (manual batch discipline).
   const toProcess = candidateUrls.slice(0, maxPerRun);
 
-  // STEP 13 CHANGE:
-  // Removed ALL budget / enqueue gating from this script.
-  // Rationale:
-  // - This script is operator-controlled (your machine, your dataset).
-  // - Ingestion must not create “pending but never enqueued” images.
-  // - Cost controls belong in the worker (the only place model calls happen).
   console.log(
     `Budget gating disabled for file-ingest. All newly ingested images will be enqueued.`,
   );
@@ -287,8 +272,7 @@ async function main(): Promise<void> {
     processed++;
 
     try {
-      // STEP 13 CHANGE: Secondary idempotency check by sourceUrl.
-      // Why “secondary”:
+      // Secondary idempotency check by sourceUrl:
       // - sha256 uniqueness is the real dedupe guarantee
       // - but sourceUrl check avoids re-downloading the same URL repeatedly
       const existingBySourceUrl = await db
@@ -321,14 +305,12 @@ async function main(): Promise<void> {
         .limit(1);
 
       if (existingBySha.length > 0) {
-        // If you want, you could “attach” sourceUrl to an existing image later,
-        // but that’s a separate “many sources per image” design (new table).
         skipped++;
         continue;
       }
 
       // Deterministic key: uses sha + ext.
-      // STEP 13 CHANGE: namespace under images/reddit-scrape/ to distinguish from API ingestion.
+      // Namespace under images/reddit-scrape/ to distinguish from API ingestion.
       const objectKey = `images/reddit-scrape/${sha}.${ext}`;
 
       await putObject({ key: objectKey, body: bytes, contentType });
@@ -345,11 +327,11 @@ async function main(): Promise<void> {
           sha256: sha,
           status: "pending",
 
-          // STEP 13 CHANGE: mark origin clearly.
+          // Mark origin clearly.
           source: "reddit_scrape",
 
-          // We do NOT have post_id from i.redd.it URL alone.
-          // We keep sourceRef null and store the raw URL in sourceUrl.
+          // It's not possible to get post_id from i.redd.it URL alone.
+          // Keep sourceRef null and store the raw URL in sourceUrl.
           sourceRef: null,
           sourceUrl: url,
         })
