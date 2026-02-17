@@ -313,7 +313,7 @@ export async function tagImageWithOpenAI(params: {
     temperature: 0,
 
     // Hard cap on output tokens: we only want a small JSON array.
-    max_output_tokens: 900,
+    max_output_tokens: 2500,
 
     // Ask OpenAI to treat the text output as plain text.
     // We enforce JSON-ness ourselves via the instruction + parsing.

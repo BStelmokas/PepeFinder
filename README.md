@@ -1,239 +1,420 @@
-# Create T3 App
+# PepeFinder
 
-This is a [T3 Stack](https://create.t3.gg/) project bootstrapped with `create-t3-app`.
+PepeFinder is an AI-tagged **Pepe meme search engine** designed as a small, production-minded system.
 
-## What's next? How do I make an app with this?
+It is intentionally simple, intentionally bounded, and intentionally deterministic.
 
-We try to keep this project as simple as possible, so you can start with just the scaffolding we set up for you, and add additional things later when they become necessary.
+This repository is both:
 
-If you are not familiar with the different technologies used in this project, please refer to the respective docs. If you still are in the wind, please join our [Discord](https://t3.gg/discord) and ask for help.
-
-- [Next.js](https://nextjs.org)
-- [NextAuth.js](https://next-auth.js.org)
-- [Prisma](https://prisma.io)
-- [Drizzle](https://orm.drizzle.team)
-- [Tailwind CSS](https://tailwindcss.com)
-- [tRPC](https://trpc.io)
-
-## Learn More
-
-To learn more about the [T3 Stack](https://create.t3.gg/), take a look at the following resources:
-
-- [Documentation](https://create.t3.gg/)
-- [Learn the T3 Stack](https://create.t3.gg/en/faq#what-learning-resources-are-currently-available) — Check out these awesome tutorials
-
-You can check out the [create-t3-app GitHub repository](https://github.com/t3-oss/create-t3-app) — your feedback and contributions are welcome!
-
-## How do I deploy this?
-
-Follow our deployment guides for [Vercel](https://create.t3.gg/en/deployment/vercel), [Netlify](https://create.t3.gg/en/deployment/netlify) and [Docker](https://create.t3.gg/en/deployment/docker) for more information.
+1. A real deployable application.
+2. My primary portfolio project — built to be readable, reasoned about, and maintainable.
 
 ---
 
-## Database Table Structures
+# Core Design Principle
 
-images table:
-
-```
-┌─────────────────────────────────────────┐
-│ images                                  │
-├─────────────────────────────────────────┤
-│ id           SERIAL PRIMARY KEY         │
-│ storage_key  TEXT        NOT NULL       │
-│ sha256       VARCHAR(64) NOT NULL UNIQUE│
-│ status       ENUM(image_status)         │
-│ created_at   TIMESTAMPTZ NOT NULL       │
-│ updated_at   TIMESTAMPTZ NOT NULL       │
-│ source       VARCHAR(32)     NULL       │
-│ source_ref   TEXT            NULL       │
-└─────────────────────────────────────────┘
-
-```
-
-tags table
-
-```
-┌─────────────────────────────────────────┐
-│ tags                                    │
-├─────────────────────────────────────────┤
-│ id           SERIAL PRIMARY KEY         │
-│ name         VARCHAR(64) NOT NULL UNIQUE│
-│ created_at   TIMESTAMPTZ NOT NULL       │
-└─────────────────────────────────────────┘
-
-```
-
-image_tags table (join table)
-
-```
-┌─────────────────────────────────────────┐
-│ image_tags                              │
-├─────────────────────────────────────────┤
-│ image_id     INT NOT NULL ──────────┐  │
-│ tag_id       INT NOT NULL ───────┐  │  │
-│ confidence   REAL NOT NULL       │  │  │
-│ created_at   TIMESTAMPTZ NOT NULL│  │  │
-├──────────────────────────────────┴──┴──┤
-│ PRIMARY KEY (image_id, tag_id)          │
-│ CHECK (confidence >= 0 AND <= 1)        │
-└─────────────────────────────────────────┘
-
-```
-
-Whole-system relationship diagram
-
-```
-            ┌───────────────┐
-            │   images      │
-            │───────────────│
-            │ id (PK)       │
-            │ storage_key   │
-            │ sha256        │
-            │ status        │
-            │ created_at    │
-            └───────┬───────┘
-                    │
-                    │ 1
-                    │
-                    │ *
-            ┌───────▼────────┐
-            │  image_tags    │
-            │────────────────│
-            │ image_id (PK)  │
-            │ tag_id   (PK)  │
-            │ confidence     │
-            │ created_at     │
-            └───────┬────────┘
-                    │
-                    │ *
-                    │
-                    │ 1
-            ┌───────▼───────┐
-            │     tags      │
-            │───────────────│
-            │ id (PK)       │
-            │ name (unique) │
-            │ created_at    │
-            └───────────────┘
-
-
-```
-
-Images and tags are global entities; meaning lives in the join table, and search is counting how many joins match a query.
+> The request path is DB-only.
+> All model calls happen in a background worker.
+> Cost safety is architectural.
 
 ---
 
-## PepeFinder Architecture (Mermaid diagram)
+# What the Product Does
 
-```
-flowchart TD
-    %% ===== UI Layer =====
-    subgraph UI["Presentation Layer (Next.js App Router)"]
-        A1["Home Page / Search Page / Image Page"]
-        A2["Upload Page (Client Component)"]
-    end
+## The Core Loop
 
-    %% ===== API Layer =====
-    subgraph API["API Layer (tRPC Procedures)"]
-        B1["search.searchImages"]
-        B2["image.getById"]
-        B3["upload.createUploadPlan"]
-    end
+1. Images enter the system (manual seed, upload, or batch ingestion).
+2. A background worker generates:
+   - a caption
+   - structured tags with confidence
+3. Caption tokens are normalized and inserted into the global tag dictionary.
+4. Search matches query tokens against tags.
+5. Results are ranked deterministically.
+6. Pagination is keyset-based and stable.
 
-    %% ===== Domain Layer =====
-    subgraph DOMAIN["Domain / Business Logic (Pure Functions)"]
-        C1["tokenizeQuery()"]
-        C2["normalizeTagName()"]
-    end
-
-    %% ===== Data Access Layer =====
-    subgraph DATA["Data Access Layer (Drizzle ORM)"]
-        D1["PostgreSQL Queries"]
-    end
-
-    %% ===== Infra Layer =====
-    subgraph INFRA["Infrastructure Adapters"]
-        E1["S3 Storage Adapter"]
-    end
-
-    %% ===== Persistence =====
-    subgraph DB["Persistence"]
-        F1["PostgreSQL Database"]
-        F2["S3-Compatible Object Storage"]
-    end
-
-    %% ===== Async Workers =====
-    subgraph WORKER["Async Worker (Out of Request Path)"]
-        G1["Tagging Worker"]
-        G2["Vision / LLM APIs"]
-    end
-
-    %% ===== Flows =====
-    A1 -->|Reads| B1
-    A1 -->|Reads| B2
-    A2 -->|Upload metadata| B3
-
-    B1 --> C1
-    B2 --> D1
-    B3 --> D1
-
-    C1 --> D1
-
-    D1 --> F1
-
-    B3 --> E1
-    E1 --> F2
-
-    F1 -->|pending images| G1
-    G1 -->|model calls| G2
-    G1 -->|update status/tags| F1
-```
-
-### How to read this diagram (important)
-
-```
-Top → Bottom = abstraction level
-
-Top: user-facing concerns (UI)
-
-Middle: rules, contracts, orchestration (API + domain)
-
-Bottom: durability and side effects (DB, storage, workers)
-
-No arrows go up from lower layers making decisions.
-```
-
-### Architecture overview:
-
-PepeFinder is a layered system built around tRPC as the application boundary.
-UI components communicate exclusively with typed procedures, which orchestrate pure domain logic, database access, and infrastructure adapters.
-All expensive AI work runs asynchronously in workers, ensuring a DB-only, deterministic request path for search and browsing.
+Search never depends on AI availability.
 
 ---
 
-## Cost-safety & operational knobs (MVP1)
+# New: Download & Moderation
 
-PepeFinder’s **request path never calls paid AI**. All vision/LLM calls happen in the **tagging worker** only.
+## Reliable Downloads
 
-### Hard safety invariants
+Images can be downloaded via a dedicated server endpoint that:
 
-- **Kill switch**: set `TAGGING_PAUSED=true` to immediately stop all model calls (search and browsing still work).
-- **Daily cap**: `TAGGING_DAILY_CAP` limits how many jobs can reach “done” per UTC day.
-- **Strict timeouts**: `OPENAI_VISION_TIMEOUT_MS` is a hard abort per model request (fail-closed).
+- Fetches the object from storage
+- Streams bytes through the app layer
+- Forces `Content-Disposition: attachment`
 
-### Environment variables
-
-Worker-only / server-only:
-
-- `TAGGING_PAUSED` (`true` / `false`, default `false`)
-- `TAGGING_DAILY_CAP` (integer as string, default `100`)
-- `OPENAI_API_KEY` (required)
-- `OPENAI_VISION_MODEL` (default `gpt-4.1-mini`)
-- `OPENAI_VISION_TIMEOUT_MS` (default `15000`)
-
-### Failure behavior (fail-closed)
-
-- If paused or cap exceeded: jobs are returned to `queued` (deferred), nothing is billed.
-- If the model times out or errors: job becomes `failed`, image becomes `failed`, and `tag_jobs.last_error` is recorded for debugging.
+This guarantees consistent download behavior across browsers and object storage providers.
 
 ---
+
+## Flag Toggle (Soft Moderation)
+
+Each image includes a flag icon that:
+
+- Toggles per browser
+- Turns red when flagged
+- Updates a persistent `flag_count` in the database
+- Can be toggled off (decrementing the counter safely)
+
+This is intentionally a **soft moderation signal**:
+
+- No accounts
+- No authentication
+- No complex abuse controls
+- No hidden background automation
+
+Moderation is explicit and operator-driven.
+
+---
+
+## Operator Moderation Script
+
+A CLI script allows:
+
+- Unlisting images (removing from search by changing status)
+- Deleting images (removing DB row + storage object)
+- Dry-run preview mode
+- Safety guard: minimum flag threshold must be ≥ 1
+
+Moderation remains an operational workflow, not a UI feature.
+
+---
+
+# Search Characteristics
+
+## Deterministic Ranking
+
+Eligibility:
+at least one distinct query token matches a tag.
+
+Ranking:
+match_count DESC
+created_at DESC
+id DESC
+
+Confidence does not affect ranking.
+
+---
+
+## Caption-as-Tag Indexing
+
+Captions are stored and rendered on the image page.
+
+Caption tokens are normalized and inserted as tags during worker processing, so users can search by remembered phrases without changing ranking semantics.
+
+---
+
+## Stopwords + Hyphenated Tags (Searchability Improvements)
+
+As the corpus grew (and model tagging became “real”), two practical issues showed up:
+
+1. The model sometimes emitted stopwords as tags (e.g. `a`, `the`, `and`) — pure noise for tag overlap search.
+2. Some useful tags were hyphenated (`film-noir`, `red-shirt`) but users naturally search with spaces (“film noir”, “red shirt”).
+
+PepeFinder now enforces two invariants across **all** ingestion paths (uploads, seed scripts, Reddit batch runs, and the worker):
+
+- **Stopword filtering**
+  - Stopwords are removed at token boundaries using the shared normalization module.
+  - This applies to user queries _and_ to model-produced tag phrases before persistence.
+  - Default stopwords are intentionally tiny: `a`, `an`, `the`, `and`.
+
+- **Hyphen expansion**
+  - If an image has a hyphenated tag, it automatically receives the split tokens too:
+    - `film-noir` → also `film` and `noir`
+    - `red-shirt` → also `red` and `shirt`
+  - The original hyphenated tag is preserved (it’s still useful and often the “best” label).
+  - A one-off, idempotent backfill script brings already-tagged images up to the same invariant.
+
+This keeps ranking deterministic while making search behave more like humans expect.
+
+---
+
+# Pagination
+
+Search uses **cursor-based keyset pagination**.
+
+Default page size: **96 results**.
+
+Cursor tuple:
+
+(match_count, created_at, id)
+
+This ensures:
+
+- Stable ordering
+- No offset-scan performance degradation
+- Deterministic next-page boundaries
+
+---
+
+# Stack
+
+- Next.js (App Router)
+- tRPC (authoritative app API)
+- Drizzle ORM
+- PostgreSQL
+- Zod
+- Tailwind CSS
+- S3-compatible object storage (Cloudflare R2 compatible)
+- OpenAI Vision model (worker-only integration)
+- Node 20
+- pnpm
+
+---
+
+# Architecture Overview
+
+## Application Layer
+
+- All domain logic lives behind tRPC procedures.
+- Server Components call the server-side tRPC caller.
+- No component directly queries the database.
+- Route handlers are infra-only (health, download streaming).
+
+---
+
+## Storage Layer
+
+- Images stored in S3-compatible bucket.
+- SHA-256 dedupe.
+- Deterministic storage keys.
+- Idempotent ingestion.
+- Attachment streaming endpoint for reliable downloads.
+
+---
+
+## Async Worker
+
+Separate Node process:
+
+1. Claims job using `FOR UPDATE SKIP LOCKED`
+2. Enforces:
+   - `TAGGING_PAUSED`
+   - `TAGGING_DAILY_CAP`
+   - strict model timeout
+3. Calls vision model
+4. Writes caption + tags
+5. Transitions image status
+
+Before writing tags, the worker also applies the shared normalization rules:
+
+- stopword filtering (drops `a`, `an`, `the`, `and`)
+- phrase tokenization into atomic tags
+- hyphenated tag expansion (`film-noir` → `film` + `noir`)
+
+If the model fails:
+
+- Job marked failed
+- Image marked failed
+- Search unaffected
+
+---
+
+# Pages (MVP Scope)
+
+Core product pages are **exactly four**:
+
+1. `/` — search entry
+2. `/search?q=...` — results grid
+3. `/image/[id]` — image detail (caption + tags + download + flag)
+4. `/upload` — upload + indexing polling
+
+In addition, the app ships two **static production hygiene pages**:
+
+- `/privacy` — minimal privacy policy (honest MVP statement)
+- `/takedown` — clear removal process for rights-holders
+
+A global footer links Contact / Privacy / Takedown on every page.
+
+---
+
+# Database Schema
+
+## images
+
+- storage pointer
+- sha256 (unique)
+- status (pending/indexed/failed)
+- caption
+- flag_count (soft moderation signal)
+- optional attribution (source, source_ref, source_url)
+- timestamps (UTC)
+
+## tags
+
+- normalized global tag dictionary
+- unique name
+
+## image_tags
+
+- image_id
+- tag_id
+- confidence
+- composite primary key
+
+## tag_jobs
+
+- Postgres-backed queue
+- unique per image
+- status + attempts + error storage
+
+Search joins:
+
+images → image_tags → tags
+
+Ranking uses:
+
+COUNT(DISTINCT tag_id)
+
+---
+
+# Ingestion Modes
+
+## Manual Seed
+
+Small curated dataset.
+
+## Upload
+
+- Validated on client + server
+- SHA-256 dedupe
+- Enqueues tagging job
+
+## Reddit Archive Ingestion (Manual Batch)
+
+- Processes archived JSON link sets (~6k+ processed)
+- Filters direct image URLs
+- Downloads, hashes, uploads
+- Idempotent
+- Enqueues tagging jobs
+
+No crawler infra.
+No background scraping daemon.
+
+---
+
+# Operational Pages (Contact / Privacy / Takedown)
+
+Even small services need a clear “human backstop.”
+
+PepeFinder includes:
+
+- A global footer with:
+  - Contact (mailto)
+  - Privacy (`/privacy`)
+  - Takedown (`/takedown`)
+- A simple takedown process that’s handled manually by the operator
+
+This isn’t over-engineering — it’s basic production hygiene, especially when hosting user uploads and third-party sourced images.
+
+---
+
+# New: Compact Image Detail Layout (Scrollable Tags)
+
+As the corpus grew, the image detail page regularly showed 30+ tags per image.
+
+Instead of letting the page become a long scroll:
+
+- The tags panel is **height-matched to the image panel**
+- If tags exceed the available space, the tags list becomes **internally scrollable**
+- The image itself stays natural-size (never stretched)
+- This behavior applies on **mobile and desktop**, including one-column layouts
+
+This is a small UX polish that keeps browsing fast and keeps the UI feeling “tight” even with dense metadata.
+
+---
+
+# Database Migrations (Important)
+
+This project is moving into a real production regime.
+
+For prototyping, `drizzle-kit push` is convenient — but it can apply destructive diffs and it does **not** leave an auditable history.
+
+PepeFinder now uses a migration-based workflow:
+
+- **Generate** SQL migrations from schema changes:
+  - `pnpm db:generate`
+- **Apply** migrations to a target database:
+  - `pnpm db:migrate`
+
+Migration files live in `./drizzle/` and are committed to Git, so schema changes are reviewable and deploys are deterministic.
+
+---
+
+# Local Development
+
+Install:
+
+```bash
+pnpm install
+Generate migrations (recommended workflow):
+
+pnpm db:generate
+Apply migrations:
+
+pnpm db:migrate
+Run app:
+
+pnpm dev
+Run worker:
+
+pnpm worker:tagger
+Run moderation script:
+
+pnpm flags:moderate -- --mode=unlist -- --min=5 --dry-run
+Run stopword cleanup:
+
+pnpm remove:stopwords
+Run hyphen backfill:
+
+pnpm hyphens:backfill
+```
+
+Note: pnpm drizzle-kit push still exists, but it is intentionally avoided for production-style workflows.
+
+Operational Safety Controls
+Worker-only environment variables:
+
+TAGGING_PAUSED
+
+TAGGING_DAILY_CAP
+
+OPENAI_API_KEY
+
+OPENAI_VISION_MODEL
+
+OPENAI_VISION_TIMEOUT_MS
+
+Fail-closed guarantees:
+
+If paused or cap exceeded → no model calls.
+
+If model errors or times out → job fails safely.
+
+Search continues operating.
+
+Why This Project Exists
+PepeFinder demonstrates:
+
+Controlled AI integration
+
+Deterministic ranking
+
+Cursor-based pagination
+
+Clear API boundaries
+
+Async job design using Postgres
+
+Idempotent ingestion pipelines
+
+Operator-controlled moderation
+
+Cost-aware architecture
+
+Production-minded DB migrations
+
+It is intentionally small — but structured to grow without surprises.
