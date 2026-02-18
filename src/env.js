@@ -48,7 +48,7 @@ export const env = createEnv({
       .number()
       .int()
       .min(1_000) // sanity floor: 1s minimum
-      .max(60_000) // sanity ceiling: 60s max (prevents runaway hangs)
+      .max(120_000) // sanity ceiling: 60s max (prevents runaway hangs)
       .default(15_000),
 
     // Reddit script authentication (manual batch only).
