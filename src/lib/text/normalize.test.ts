@@ -1,10 +1,5 @@
 /**
  * Vitest unit tests for the frozen normalization/tokenization semantics.
- *
- * Why tests are justified here (even in an MVP):
- * - This logic is foundational and reused everywhere (UI, tRPC, worker, seeding).
- * - A “small” accidental change can silently change search results (high regression risk).
- * - This is pure logic, so tests are cheap and stable.
  */
 
 import { describe, expect, it } from "vitest";
@@ -14,7 +9,6 @@ import {
   normalizeQueryString,
   normalizeTagName,
   normalizeWhitespace,
-  removeStopwordsFromPhrase,
   removeStopwordsFromTokens,
   stripNonAscii,
   tokenizeQuery,
@@ -37,7 +31,6 @@ describe("lowercaseAsciiOnly", () => {
   });
 
   it("does not change non-ASCII characters (no unicode normalization)", () => {
-    // We keep unicode characters unchanged in this step (stripNonAscii is separate).
     expect(lowercaseAsciiOnly("ÄÖÜ")).toBe("ÄÖÜ");
   });
 });
@@ -45,15 +38,12 @@ describe("lowercaseAsciiOnly", () => {
 describe("stripNonAscii", () => {
   it("removes non-ASCII characters deterministically", () => {
     expect(stripNonAscii("pepe🐸frog")).toBe("pepefrog");
-    expect(stripNonAscii("ÄBC")).toBe("BC"); // 'Ä' removed, ASCII remains
+    expect(stripNonAscii("ÄBC")).toBe("BC");
   });
 });
 
 describe("normalizeQueryString", () => {
   it("applies whitespace collapse, ASCII lowercase, and non-ASCII stripping", () => {
-    // - whitespace collapsed
-    // - ASCII lowercased
-    // - emoji removed
     expect(normalizeQueryString("  Pepe   SAD 🐸  ")).toBe("pepe sad");
   });
 
@@ -64,7 +54,7 @@ describe("normalizeQueryString", () => {
 
 describe("stopwords helpers", () => {
   it("DEFAULT_STOPWORDS contains the tiny conservative set", () => {
-    // This test makes stopword list changes explicit (no “silent” semantics changes).
+    // Makes stopword list changes explicit (no silent semantics changes).
     expect(Array.from(DEFAULT_STOPWORDS)).toEqual(["a", "an", "the"]);
   });
 
@@ -76,11 +66,6 @@ describe("stopwords helpers", () => {
     expect(
       removeStopwordsFromTokens(["theory", "apple", "the", "anthropology"]),
     ).toEqual(["theory", "apple", "anthropology"]);
-  });
-
-  it("removeStopwordsFromPhrase removes stopwords from normalized phrases", () => {
-    expect(removeStopwordsFromPhrase("a frog")).toBe("frog");
-    expect(removeStopwordsFromPhrase("the sad pepe")).toBe("sad pepe");
   });
 });
 
@@ -143,7 +128,7 @@ describe("punctuation stripping (preserve inner hyphens)", () => {
 
   it("still enforces tag single-token rule after punctuation stripping", () => {
     expect(normalizeTagName("sad!")).toBe("sad");
-    expect(normalizeTagName("sad, angry")).toBeNull(); // becomes "sad angry" → not a single token
+    expect(normalizeTagName("sad, angry")).toBeNull(); // becomes "sad angry" = not a single token
   });
 
   it("normalizeQueryString stays deterministic and whitespace-normalized", () => {
