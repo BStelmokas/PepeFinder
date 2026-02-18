@@ -160,30 +160,48 @@ async function writeTagsForImage(args: {
       // - "red-shirt" -> ["red-shirt","red","shirt"]
       const expandedNames = expandHyphenatedToken(normalized);
 
-      for (const name of expandedNames) {
+      /**
+       * Dedupe expansions to avoid wasting DB work.
+       *
+       * Even if expandHyphenatedToken() is already careful, this is a cheap guardrail:
+       * - guarantees we won't upsert the same tag twice in one suggestion
+       * - reduces DB round trips in the worker hot loop
+       */
+      const uniqueExpandedNames = Array.from(new Set(expandedNames));
+
+      for (const name of uniqueExpandedNames) {
+        /**
+         * CRITICAL BUG FIX:
+         * - We must use `name` (the expanded token) here.
+         * - Using `normalized` would repeatedly upsert only the original hyphenated form
+         *   and never store the atomic expansions ("film", "noir").
+         */
         // Upsert tag row by unique(tags.name).
         const insertedTag = await tx
           .insert(tags)
-          .values({ name: normalized })
+          .values({ name })
           .onConflictDoNothing()
           .returning({ id: tags.id });
 
         let tagId: number;
 
         if (insertedTag.length > 0) {
+          // Happy path: we inserted a new tag row and got its id back.
           tagId = insertedTag[0]!.id;
         } else {
+          /**
+           * Conflict path: the tag already existed, so returning() returns nothing.
+           * We must fetch the existing id to insert the join row.
+           */
           // Fetch existing id (conflict path).
           const existing = await tx
             .select({ id: tags.id })
             .from(tags)
-            .where(sql`${tags.name} = ${normalized}`)
+            .where(sql`${tags.name} = ${name}`)
             .limit(1);
 
           if (!existing[0]) {
-            throw new Error(
-              `Tag conflict but cannot fetch id for: ${normalized}`,
-            );
+            throw new Error(`Tag conflict but cannot fetch id for: ${name}`);
           }
 
           tagId = existing[0].id;

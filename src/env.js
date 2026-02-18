@@ -32,16 +32,16 @@ export const env = createEnv({
     /**
      * Worker controls (cost safety by design)
      */
-
     // Hard kill switch: if true, the worker will refuse to process jobs.
     TAGGING_PAUSED: z.enum(["true", "false"]).optional().default("false"),
 
     // Simple global cap: max completed jobs per UTC day.
     TAGGING_DAILY_CAP: z.coerce.number().int().min(0).default(200),
 
-    // --- OpenAI ---
-
-    // OPENAI_API_KEY is now OPTIONAL so `pnpm dev` can run without worker config.
+    /**
+     * --- OpenAI ---
+     */
+    // OPENAI_API_KEY is OPTIONAL so `pnpm dev` can run without worker config.
     OPENAI_API_KEY: z.string().min(1).optional(), // Secret key used only inside the worker process.
     OPENAI_VISION_MODEL: z.string().min(1).optional().default("gpt-4.1-mini"), // Reasonable default vision-capable model.
     OPENAI_VISION_TIMEOUT_MS: z.coerce
@@ -62,9 +62,7 @@ export const env = createEnv({
      */
     REDDIT_USER_AGENT: z.string().min(1).optional(),
 
-    /**
-     * Script knobs (manual runs).
-     */
+    // Script knobs (manual runs).
     REDDIT_SUBREDDIT: z.string().min(1).optional().default("pepethefrog"),
     REDDIT_SORT: z.enum(["new", "top"]).optional().default("new"),
     REDDIT_LIMIT: z.coerce

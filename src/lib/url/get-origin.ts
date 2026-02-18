@@ -1,4 +1,4 @@
-import { headers } from "next/headers"; // Used to derive the correct base URL at request time.
+import { headers } from "next/headers";
 import { env } from "~/env";
 
 /**
@@ -10,8 +10,8 @@ import { env } from "~/env";
  * 3) localhost (last resort for dev / misconfigured environments)
  */
 export default async function getOrigin(): Promise<string> {
-  // 1) Canonical origin (recommended for production).
-  // We normalize by removing a trailing slash to prevent double slashes in URLs.
+  // 1) Canonical origin (production).
+  // Normalize by removing a trailing slash to prevent double slashes in URLs.
   if (env.SITE_URL) {
     return env.SITE_URL.replace(/\/+$/, "");
   }
@@ -26,7 +26,7 @@ export default async function getOrigin(): Promise<string> {
   const host = h.get("host");
 
   if (!host) {
-    // If host is missing, we have no correct absolute URL.
+    // If host is missing, no correct absolute URL exists.
     // Fail closed by returning a sensible default for local dev.
     return "http:/localhost:3000";
   }

@@ -16,7 +16,6 @@ export default function HomePage() {
   return (
     <main className="min-h-screen bg-white">
       <div className="mx-auto flex min-h-screen max-w-3xl flex-col items-center justify-center px-6">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
         {/* The logo is commented out as a styling decision but left as a future option */}
         {/* <img
           src="/brand/pepe-logo.png"

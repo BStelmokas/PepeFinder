@@ -60,7 +60,6 @@ export function ImageDetailLayout(props: {
    */
   useLayoutEffect(() => {
     syncTagsHeightToImage();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Keep height in sync as layout changes.

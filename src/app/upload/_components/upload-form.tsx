@@ -9,7 +9,7 @@
  * - Upload progress and polling require client state.
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "~/trpc/react";
 
