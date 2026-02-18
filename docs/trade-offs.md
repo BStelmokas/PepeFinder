@@ -78,6 +78,18 @@ This keeps “tag overlap search” predictable while improving recall for natur
 
 This change doesn’t alter product behavior — it changes the _safety envelope_ around database evolution.
 
+**Newest “public-facing” production polish (metadata + indexing hygiene):**
+
+- Cleaned up all remaining create-t3-app / Next boilerplate branding in browser-visible metadata
+  - page titles and descriptions are now product-specific
+  - social preview metadata (OpenGraph / Twitter) is defined so links render cleanly in chat/apps
+- Replaced the default favicon/icon set with product-specific assets
+- Added robots / sitemap hygiene so the site behaves like an intentional public service (not a scaffold)
+  - this is not “SEO growth hacking”
+  - it’s basic professionalism: predictable previews, predictable indexing behavior
+
+This category of polish is easy to overlook, but it’s one of the fastest ways to make a project feel real.
+
 ---
 
 # 1) Things I consciously did worse to ship faster
@@ -603,6 +615,34 @@ Database changes are now made via committed SQL migrations:
 
 **Why it’s worth it**
 This project is meant to be production-adjacent and portfolio-quality. Migrations are part of that story.
+
+---
+
+## 2.12 “Boring” metadata polish (the difference between demo and product)
+
+**Decision**
+I treated metadata, icons, and indexing behavior as part of production readiness:
+
+- cleaned up scaffold titles/descriptions
+- added proper OpenGraph/Twitter metadata for link previews
+- replaced the default favicon/icons
+- added robots/sitemap hygiene
+
+**Why it matters**
+
+- If someone shares your link in Slack/Discord/Twitter, the preview is the product’s first impression.
+- The browser tab title is surprisingly “trust-sensitive.”
+- Search engines and crawlers behave better when you’re explicit.
+- It’s low-effort polish that prevents “this is a template” vibes.
+
+**Trade-off**
+
+- None meaningful — just time and attention to detail.
+
+**When to fix / improve**
+
+- If you add multi-tenant or authenticated features, metadata becomes more granular.
+- If you add “public vs private” sections, robots rules may need tightening.
 
 ---
 

@@ -211,6 +211,9 @@ If the model fails:
 - Image marked failed
 - Search unaffected
 
+**Operational note (important if you’re deploying on Vercel):**
+Vercel runs the web app as serverless functions. The worker is a separate process and is not “hosted by Vercel” automatically. In production you typically run the worker on separate compute (a small VPS / container host / background service) and point it at the same Postgres database. The kill switch (`TAGGING_PAUSED`) makes it safe to leave the worker deployed but idle.
+
 ---
 
 # Pages (MVP Scope)
@@ -327,6 +330,19 @@ This is a small UX polish that keeps browsing fast and keeps the UI feeling “t
 
 ---
 
+# Metadata + Share Preview Polish (Small detail, big trust signal)
+
+Before shipping, I cleaned up the last bits of “template smell” that tend to stick around in new Next.js projects:
+
+- Product-specific browser title + descriptions (no scaffold branding)
+- Proper OpenGraph / Twitter metadata so links preview cleanly in chat apps
+- Custom favicon/icon set (no default boilerplate assets)
+- Robots / sitemap hygiene so crawlers behave predictably
+
+This doesn’t change product semantics, but it absolutely changes how “real” the project feels when someone visits or shares it.
+
+---
+
 # Database Migrations (Important)
 
 This project is moving into a real production regime.
@@ -416,5 +432,7 @@ Operator-controlled moderation
 Cost-aware architecture
 
 Production-minded DB migrations
+
+Production polish (metadata, previews, indexing hygiene)
 
 It is intentionally small — but structured to grow without surprises.
