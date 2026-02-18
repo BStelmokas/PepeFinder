@@ -4,33 +4,28 @@
  * Responsibility (infra-only):
  * - Provide a reliable “download” endpoint that forces Content-Disposition: attachment.
  *
- * Why we need this:
+ * Why this is needed:
  * - Direct S3/R2 public URLs often open in a new tab instead of downloading.
  * - The HTML `download` attribute is not consistently honored cross-origin.
  *
  * This route:
  * - Looks up the image in Postgres (DB = source of truth for storage key)
- * - Resolves a fetchable URL (public or presigned) using our existing storage resolver
+ * - Resolves a fetchable URL (public or presigned) using the existing storage resolver
  * - Fetches bytes server-side
  * - Responds with headers that force download
- *
- * Important:
- * - This is not “app logic”; it is an infra delivery endpoint (like healthz).
- * - No AI calls. No domain changes. Just file delivery.
  */
 
-import { NextResponse } from "next/server"; // Next route handler response helper.
-import { db } from "~/server/db"; // Single DB instance (per your rules).
-import { images } from "~/server/db/schema"; // Table for lookup.
-import { eq } from "drizzle-orm"; // Safe WHERE helper.
-import { resolveImageUrlForBrowser } from "~/server/storage/resolve-image-url"; // Central storage policy resolver.
+import { NextResponse } from "next/server";
+import { db } from "~/server/db";
+import { images } from "~/server/db/schema";
+import { eq } from "drizzle-orm";
+import { resolveImageUrlForBrowser } from "~/server/storage/resolve-image-url";
 
 export async function GET(
   _req: Request,
-  ctx: { params: Promise<{ id: string }> }, // Next 15: params can be a Promise.
+  ctx: { params: Promise<{ id: string }> },
 ) {
   try {
-    // Next 15-safe param read.
     const { id } = await ctx.params;
 
     // Parse id.
@@ -62,15 +57,11 @@ export async function GET(
       );
     }
 
-    // Resolve to a URL we can fetch from the server.
-    // This might return:
-    // - a public URL, or
-    // - a presigned URL, depending on your storage config.
+    // Resolve to a URL that can be fetched from the server.
     const fetchUrl = await resolveImageUrlForBrowser(row.storageKey);
 
     // Fetch bytes server-side.
-    // NOTE: we are intentionally NOT streaming in MVP — we buffer.
-    // For large files, streaming is better, but Pepe images are small and this keeps code simple.
+    // For large files, streaming is better, but Pepe images are small so buffering keeps code simple.
     const upstream = await fetch(fetchUrl);
 
     if (!upstream.ok) {
@@ -90,7 +81,7 @@ export async function GET(
     const bytes = await upstream.arrayBuffer();
 
     // Build a friendly filename.
-    // We sanitize heavily because captions can contain punctuation and non-filename characters.
+    // Sanitize heavily because captions can contain punctuation and non-filename characters.
     const baseName = row.caption?.trim()
       ? row.caption.trim()
       : `pepe-${imageId}`;
@@ -100,7 +91,7 @@ export async function GET(
       .trim()
       .replace(/\s+/g, "-"); // spaces -> hyphens
 
-    // We don't always know extension, but browsers use content-type anyway.
+    // The extension isn't always known, but browsers use content-type anyway.
     const filename = `${safeName || `pepe-${imageId}`}.jpg`;
 
     // Return with attachment header to force download.

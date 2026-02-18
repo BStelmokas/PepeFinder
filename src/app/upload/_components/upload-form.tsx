@@ -7,29 +7,12 @@
  * - File input (<input type="file">) is inherently client-side.
  * - SHA-256 hashing uses browser Web Crypto (crypto.subtle).
  * - Upload progress and polling require client state.
- *
- * Key architectural constraints we obey:
- * - All writes go through tRPC React client:
- *   - We call upload.createUploadPlan (authoritative server boundary).
- * - Actual file bytes go directly to S3 via presigned PUT:
- *   - This avoids pushing large bytes through Next serverless functions.
- * - No AI calls happen here or on request path.
- *
- * UX goals:
- * - Minimal and professional UI.
- * - Clear states: idle -> hashing -> requesting URL -> uploading -> indexing/polling -> done/failed.
  */
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { api } from "~/trpc/react"; // T3’s tRPC React client (TanStack Query) - authoritative for client reads/writes.
+import { api } from "~/trpc/react";
 
-/**
- * Keep client-side validation aligned with server rules for UX consistency.
- * Server is still authoritative (re-validates), but this avoids wasting time.
- *
- * NOTE: These must match the server values in upload router.
- */
 const ALLOWED_IMAGE_MIME_TYPES = new Set([
   "image/png",
   "image/jpeg",
@@ -65,7 +48,7 @@ function bufferToHex(buf: ArrayBuffer): string {
 /**
  * Compute SHA-256 of a File using Web Crypto.
  *
- * Why do this client-side?
+ * Why do this client-side:
  * - tRPC is JSON; sending raw bytes to the server is awkward and expensive.
  * - Presigned PUT lets bytes go directly to object storage.
  * - SHA-256 is needed for deterministic object keys + dedupe.
@@ -85,30 +68,20 @@ export function UploadForm() {
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
-  // Once we have an imageId, we can poll its status via image.getById.
   const [imageId, setImageId] = useState<number | null>(null);
 
-  /**
-   * tRPC mutation: ask the server for an upload plan.
-   *
-   * This is the authoritative server boundary that:
-   * - re-validates size/type
-   * - dedupes by sha256
-   * - inserts pending image row (if new)
-   * - returns a presigned PUT URL (if new)
-   */
+  // tRPC mutation: ask the server for an upload plan.
   const createPlan = api.upload.createUploadPlan.useMutation();
 
   /**
-   * New in Step 11:
-   * - enqueueTaggingJob tells the server “bytes exist, please queue worker tagging”
-   * - It is idempotent due to unique(image_id) in tag_jobs.
+   * enqueueTaggingJob tells the server “bytes exist, please queue worker tagging”
+   * It is idempotent due to unique(image_id) in tag_jobs.
    */
   const enqueueJob = api.upload.enqueueTaggingJob.useMutation();
 
   /**
    * Validate the selected file locally for UX.
-   * Server still re-validates (authoritative), but we avoid wasted work.
+   * Server still re-validates (authoritative), but this avoids wasted work.
    */
   const validationMessage = useMemo(() => {
     if (!selectedFile) return null;
@@ -132,7 +105,7 @@ export function UploadForm() {
       return;
     }
 
-    // Client validation for UX (server is still authoritative).
+    // Client validation for UX.
     setStage("validating");
     if (validationMessage) {
       setStage("failed");
@@ -146,7 +119,7 @@ export function UploadForm() {
        *
        * This is what enables:
        * - deterministic object key: images/<sha256>.<ext>
-       * - dedupe: if sha256 exists, we reuse the existing image
+       * - dedupe: if sha256 exists, reuse the existing image
        */
       setStage("hashing");
       const sha256 = await sha256File(selectedFile);
@@ -154,7 +127,7 @@ export function UploadForm() {
       /**
        * Step 2: Ask server for upload plan
        *
-       * - If already exists -> server tells us imageId and status.
+       * - If already exists -> server gives imageId and status.
        * - If new -> server returns presigned PUT URL and a newly created pending image row.
        */
       setStage("planning");
@@ -165,17 +138,11 @@ export function UploadForm() {
         sha256,
       });
 
-      // We always set imageId so we can redirect or poll.
+      // Always set imageId to be able to redirect or poll.
       setImageId(plan.imageId);
 
       /**
-       * STEP 12 UI CHANGE:
-       * We ALWAYS redirect to /image/[id] after a successful flow.
-       *
-       * Why:
-       * - /upload is not a waiting room
-       * - worker may not be running; polling would stall forever
-       * - /image/[id] is where status belongs
+       * Always redirect to /image/[id] after a successful flow (worker may not be running; polling would stall forever).
        */
 
       // Case A: Deduped image already exists.
@@ -213,9 +180,7 @@ export function UploadForm() {
         );
       }
 
-      /**
-       * After bytes exist, enqueue the worker job (idempotent).
-       */
+      // After bytes exist, enqueue the worker job (idempotent).
       setStage("enqueuing");
       await enqueueJob.mutateAsync({ imageId: plan.imageId });
 
@@ -312,10 +277,6 @@ export function UploadForm() {
           </p>
         )}
 
-        {/* STEP 12 UI CHANGE:
-            We no longer display a long “indexing/polling” panel here because we redirect.
-            But it's still useful to show a short progress hint while the user is waiting
-            for the redirect to happen during upload/enqueue stages. */}
         {!error && stage !== "idle" && (
           <div className="space-y-2">
             <p className="text-sm text-gray-700">

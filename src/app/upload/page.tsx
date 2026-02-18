@@ -1,14 +1,14 @@
 /**
- * "/upload" — Upload page (MVP1, 4th and final page in MVP)
+ * "/upload" — Upload page
  *
- * Responsibility (page-level):
+ * Responsibility:
  * - Provide a simple, professional shell for the upload UI.
  * - Keep this page a Server Component by default.
  *
- * Why Server Component wrapper?
+ * Why Server Component:
  * - The page layout (title, framing) is static and doesn’t need client JS.
  * - The upload form itself *does* need client JS (file picker, hashing, progress),
- *   so we isolate that into a client component.
+ *   so isolate that into a client component.
  *
  * Architecture:
  * - Client component performs:
@@ -18,7 +18,7 @@
  *   - direct S3 upload via presigned PUT
  *   - polling status via tRPC query
  *
- * We keep business rules on the server:
+ * Keep business rules on the server:
  * - file size/type caps are re-validated in the tRPC mutation
  * - dedupe is enforced by DB uniqueness on sha256
  */
@@ -32,6 +32,7 @@ export default function UploadPage() {
       <div className="mx-auto max-w-3xl px-6 py-10">
         {/* Local navigation keeps this page from feeling isolated. */}
         <div className="flex items-center justify-between">
+          {/* Empty div to justify the Home button to the right */}
           <div></div>
 
           <Link
@@ -51,7 +52,7 @@ export default function UploadPage() {
           not appear in search right away.
         </p>
 
-        {/* Client-side uploader: isolated for correctness + minimal JS surface. */}
+        {/* Client-side uploader: isolated for correctness and minimal JS surface. */}
         <div className="mt-7">
           <UploadForm />
         </div>

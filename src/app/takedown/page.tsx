@@ -1,16 +1,11 @@
 /**
  * /takedown
  *
- * Minimal takedown policy page for MVP.
+ * Minimal takedown policy page.
  *
  * Why this exists:
- * - You store third-party content (e.g., Reddit-sourced images).
- * - You want a clear, fast way for rights holders to request removal.
- *
- * MVP stance:
- * - Handle requests manually by email.
- * - Use your internal takedown scripts to remove the object + DB row(s).
- * - Keep the process clear and easy.
+ * - The app stores third-party content (e.g. Reddit, Pinterest sourced images).
+ * - There needs to be a clear, fast way for rights holders to request removal.
  */
 
 import Link from "next/link";
@@ -20,7 +15,6 @@ const TAKEDOWN_EMAIL = "herodotus9719@gmail.com";
 export default function TakedownPage() {
   return (
     <main className="mx-auto max-w-3xl p-6">
-      {/* STEP CHANGE: Home link positioned top-right */}
       <div className="mb-4 flex justify-end">
         <Link
           href="/"

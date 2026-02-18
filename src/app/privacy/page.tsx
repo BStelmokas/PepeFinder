@@ -1,16 +1,12 @@
 /**
  * /privacy
  *
- * Minimal privacy policy page for MVP.
+ * Minimal privacy policy page.
  *
  * Why this exists:
- * - You accept uploads and store content.
- * - You use third-party infrastructure providers (DB, storage, AI).
+ * - The app accepts uploads and store content.
+ * - Uses third-party infrastructure providers (DB, storage, AI).
  * - Users (and platforms) expect a clear explanation of data handling.
- *
- * MVP stance:
- * - Keep it honest, short, and specific.
- * - Don’t promise things you aren’t implementing.
  */
 
 import Link from "next/link";
@@ -20,7 +16,6 @@ const CONTACT_EMAIL = "herodotus9719@gmail.com";
 export default function PrivacyPage() {
   return (
     <main className="mx-auto max-w-3xl p-6">
-      {/* STEP CHANGE: Home link positioned top-right */}
       <div className="mb-4 flex justify-end">
         <Link
           href="/"

@@ -1,6 +1,4 @@
 /**
- * "/image/[id]" — Image detail page (MVP0)
- *
  * Responsibility:
  * - Fetch an image by ID via tRPC server-side caller (no HTTP).
  * - Render the image and its tags with confidence.
@@ -8,30 +6,24 @@
  * Why Server Component:
  * - Read-only view.
  * - Keeping it server-rendered avoids client JS and keeps the MVP fast.
- *
- * MVP assumption:
- * - image.storageKey is directly usable as <img src="...">.
  */
 
-import Link from "next/link"; // Used for navigation back to search/home.
-import { headers } from "next/headers"; // Used to build tRPC context in the server caller path.
-import { createCaller } from "~/server/api/root"; // Typed server-side tRPC caller factory.
-import { createTRPCContext } from "~/server/api/trpc"; // Context builder that preserves middleware invariants.
-// STEP FLAG/DOWNLOAD CHANGE: client component for Download + Flag actions.
+import Link from "next/link";
+import { headers } from "next/headers";
+import { createCaller } from "~/server/api/root";
+import { createTRPCContext } from "~/server/api/trpc";
 import { ImageActions } from "./_components/image-actions";
-
-// STEP 99 CHANGE: new client layout component that syncs tags height to image height (on ALL devices).
 import { ImageDetailLayout } from "./_components/image-detail-layout";
 
 /**
  * Next.js App Router "params" boundary helper.
  *
- * Problem we’re solving (Next 15):
+ * Solves (Next 15):
  * - Sometimes Next provides `params` as a Promise (async dynamic API).
- * - If we read `params.id` synchronously in those cases, Next throws:
+ * - If `params.id` are read synchronously in those cases, Next throws:
  *   “params should be awaited before using its properties”.
  *
- * So we intentionally accept both shapes:
+ * So intentionally accept both shapes:
  * - params: { id: string }
  * - params: Promise<{ id: string }>
  *
@@ -41,33 +33,19 @@ type ParamsShape = { id: string };
 type PropsShape = { params: ParamsShape | Promise<ParamsShape> };
 
 export default async function ImageDetailPage(props: unknown) {
-  /**
-   * IMPORTANT:
-   * We intentionally accept an untyped boundary and narrow immediately.
-   *
-   * Fix (Next 15):
-   * - `params` might be a Promise, so we `await` it defensively.
-   */
   const { params } = props as PropsShape;
 
   /**
-   * Next 15-safe: always await, even if params is already a plain object.
-   * - `await` works on non-Promises too (it simply returns the value).
-   * - That makes this line the simplest cross-version compatibility trick.
+   * Next 15-safe: defensive await.
    */
   const resolvedParams = await params;
 
-  /**
-   * Step 1: Parse the route param.
-   *
-   * Route params are strings in Next.js.
-   * Our DB uses integer IDs, so we convert carefully.
-   */
+  // Step 1: Parse the route param.
   const id = Number(resolvedParams.id);
 
   /**
    * If the URL param is not a valid positive integer,
-   * we avoid making a useless DB call and render a simple error state.
+   * avoid making a useless DB call and render a simple error state.
    */
   if (!Number.isInteger(id) || id <= 0) {
     return (
@@ -92,16 +70,10 @@ export default async function ImageDetailPage(props: unknown) {
     );
   }
 
-  /**
-   * Step 2: Create server-side tRPC caller and fetch data.
-   */
+  // Step 2: Create server-side tRPC caller and fetch data.
   const ctx = await createTRPCContext({ headers: await headers() });
   const api = createCaller(ctx);
 
-  /**
-   * This procedure throws NOT_FOUND if the image does not exist.
-   * In MVP0, we keep error handling simple and show an inline state.
-   */
   let data: Awaited<ReturnType<typeof api.image.getById>> | null = null;
 
   try {
@@ -141,15 +113,7 @@ export default async function ImageDetailPage(props: unknown) {
     ? image.caption.trim()
     : `Image #${image.id}`;
 
-  /**
-   * STEP 99 CHANGE:
-   * We delegate the full rendering (image + tags layout) to a client component.
-   *
-   * Why this is required:
-   * - Your rule is “tags panel height must match image panel height, on ALL devices”.
-   * - This requires runtime DOM measurement.
-   * - Server Components cannot measure runtime layout.
-   */
+  // Delegate the full rendering (image + tags layout) to a client component (Server Components cannot measure runtime layout).
   return (
     <ImageDetailLayout
       imageStatus={image.status}

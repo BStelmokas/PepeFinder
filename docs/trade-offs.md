@@ -426,11 +426,7 @@ Future:
 
 # Closing Thought
 
-PepeFinder is intentionally not clever.
-
-It is small.
-It is bounded.
-It is predictable.
+PepeFinder is meant to be a small, bounded, predictable product. It is a tool that is meant to be useful, rather than look useful.
 
 It demonstrates:
 

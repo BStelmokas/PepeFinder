@@ -3,27 +3,10 @@
 /**
  * ImageDetailLayout (Client Component)
  *
- * New requirement:
- * - The tags panel must match the rendered height of the image panel on ALL devices,
- *   even in 1-column layout, to prevent very tall pages.
- *
  * Behavior:
- * 1) Image panel remains natural size (we never force its height).
+ * 1) Image panel remains natural size (its height is never forced).
  * 2) Tags panel is forced to exactly that height.
  * 3) Tags list scrolls internally if it exceeds available height.
- *
- * Implementation strategy:
- * - Measure the image card's rendered height (offsetHeight).
- * - Apply that height to the tags card via inline style.
- * - Use a flex column layout in the tags card so header stays fixed and list scrolls.
- * - Re-measure on:
- *   - image load (final intrinsic height becomes known)
- *   - ResizeObserver events (layout changes, font load, responsive width changes)
- *   - window resize (orientation changes etc.)
- *
- * Why not pure CSS:
- * - CSS cannot reliably say “set sibling height equal to this element’s intrinsic-height-driven size”
- *   when that size depends on an image’s aspect ratio and responsive width.
  */
 
 import Link from "next/link";
@@ -50,34 +33,16 @@ export function ImageDetailLayout(props: {
   tags: TagRow[];
   ImageActionsSlot: React.ReactNode;
 }) {
-  /**
-   * We measure the image card’s rendered height.
-   * We do NOT measure the <img> directly because:
-   * - the card includes header + padding which also influences “visual matching”
-   * - you asked “div containing the image” vs “div containing tags” —
-   *   this is the closest, most stable UI concept.
-   *
-   * If you instead want ONLY the image box (excluding title/date),
-   * move this ref to the image container div below.
-   */
   const imageCardRef = useRef<HTMLDivElement | null>(null);
 
   /**
    * tagsCardHeightPx is applied as an inline style:
-   * - null = don't clamp (we try very hard not to be null, but it can be during first paint)
+   * - null = don't clamp
    * - number = clamp tags card height exactly
    */
   const [tagsCardHeightPx, setTagsCardHeightPx] = useState<number | null>(null);
 
-  /**
-   * Measure and store the current image card height.
-   *
-   * We keep this in a function because we call it from multiple places:
-   * - layout effect (initial measurement)
-   * - ResizeObserver callbackj
-   * - window resize handler
-   * - image onLoad
-   */
+  // Measure and store the current image card height.
   function syncTagsHeightToImage(): void {
     const el = imageCardRef.current;
     if (!el) return;
@@ -90,7 +55,7 @@ export function ImageDetailLayout(props: {
   }
 
   /**
-   * useLayoutEffect gives us a measurement ASAP after first render
+   * useLayoutEffect gives a measurement ASAP after first render
    * (before the browser paints), reducing visible “jump”.
    */
   useLayoutEffect(() => {
@@ -98,14 +63,7 @@ export function ImageDetailLayout(props: {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /**
-   * Keep height in sync as layout changes.
-   *
-   * ResizeObserver reacts to real element size changes including:
-   * - image load changing height
-   * - responsive width changes
-   * - font load shifts
-   */
+  // Keep height in sync as layout changes.
   useEffect(() => {
     const el = imageCardRef.current;
     if (!el) return;
@@ -141,9 +99,6 @@ export function ImageDetailLayout(props: {
             ← Home
           </Link>
 
-          {/* STEP CHANGE:
-              Replace the redundant "status: indexed" pill with an Upload button.
-              Keep the status pill for pending/failed, because those are meaningful states. */}
           {props.imageStatus === "indexed" ? (
             <Link
               href="/upload"
@@ -173,10 +128,7 @@ export function ImageDetailLayout(props: {
               <p className="mr-1 text-xs text-gray-500">{createdAtLabel}</p>
             </div>
 
-            {/* STEP OVERLAY CHANGE:
-             Make the image container relative so absolutely-positioned buttons can anchor to it. */}
             <div className="relative mt-4 overflow-hidden rounded-2xl border border-gray-200">
-              {/* Overlay actions live inside the same relative box */}
               {props.ImageActionsSlot}
 
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -185,7 +137,7 @@ export function ImageDetailLayout(props: {
                 alt={`Pepe image ${props.imageId}`}
                 className="h-auto w-full object-contain"
                 // When the image finishes loading, its final height may differ.
-                // We sync again immediately to avoid “tags card mismatch”.
+                // Sync again immediately to avoid “tags card mismatch”.
                 onLoad={() => syncTagsHeightToImage()}
               />
             </div>
@@ -194,9 +146,7 @@ export function ImageDetailLayout(props: {
           {/* Tags card (always height-matched to image card) */}
           <aside
             className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm"
-            // Force tags panel to match image panel height when we have a measurement.
-            // During the very first paint, tagsCardHeightPx may be null; in that case
-            // the card is natural height until we measure.
+            // Force tags panel to match image panel height when a measurement exists.
             style={tagsCardHeightPx ? { height: tagsCardHeightPx } : undefined}
           >
             {/* Flex column layout so header stays fixed and list becomes scrollable */}

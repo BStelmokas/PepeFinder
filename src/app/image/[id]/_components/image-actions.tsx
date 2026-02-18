@@ -6,62 +6,23 @@
  * Why this is a Client Component:
  * - Clicking “Flag” must call a tRPC mutation (client-side interaction).
  * - Download could be server-rendered, but we keep both actions together for a clean UI block.
- *
- * Design choice:
- * - This component is “UI + interaction” only.
- * - All domain mutations still go through tRPC (authoritative API).
- *
- *
- *
- * Goal:
- * - Download button (simple UX)
- * - Flag button that:
- *   - increments DB flag_count ONCE per browser (best-effort, no auth)
- *   - turns red after click
- *   - persists “I flagged this” via localStorage
- *
- * Why localStorage:
- * - No auth, so the server cannot reliably know "this user already flagged".
- * - localStorage gives a lightweight, per-device memory:
- *   - good UX (button stays red after refresh)
- *   - reduces accidental double-flagging
- *
- * Important caveat:
- * - This is not a security boundary.
- * - A malicious user can clear storage / script requests.
- * - That's OK for MVP: flags are a soft moderation signal.
  */
 
 import { useEffect, useMemo, useState } from "react";
 import { api } from "~/trpc/react";
 
 export function ImageActions(props: { imageId: number }) {
-  /**
-   * STEP FLAG UI CHANGE:
-   * Track whether *this browser* has flagged this image.
-   *
-   * Why boolean state:
-   * - We don't want to show a count.
-   * - We only need to render "flagged (red)" vs "not flagged".
-   */
+  // Track whether *this browser* has flagged this image.
   const [isFlagged, setIsFlagged] = useState<boolean>(false);
 
   /**
    * Storage key is deterministic per image id.
-   * This keeps localStorage tidy and makes debugging easy.
    */
   const flagStorageKey = useMemo(() => {
     return `pepefinder:flagged:image:${props.imageId}`;
   }, [props.imageId]);
 
-  /**
-   * On mount, load previous flag state from localStorage.
-   *
-   * Why in useEffect:
-   * - localStorage only exists in the browser.
-   * - This is a Client Component, but still renders initially;
-   *   useEffect avoids any server/client mismatch issues.
-   */
+  // On mount, load previous flag state from localStorage.
   useEffect(() => {
     try {
       const raw = localStorage.getItem(flagStorageKey);
@@ -91,7 +52,6 @@ export function ImageActions(props: { imageId: number }) {
 
   // Toggle handler.
   function onToggleFlag() {
-    // Toggle handler.
     const next = !isFlagged;
 
     // Send desired state to server so server can apply +1 / -1.
@@ -100,16 +60,7 @@ export function ImageActions(props: { imageId: number }) {
 
   return (
     <>
-      {/* STEP OVERLAY CHANGE:
-          Flag overlay (top-left).
-          - Uses absolute positioning.
-          - Uses translucent background so it’s readable on any image. */}
-
-      {/* Flag icon button:
-          - gray when not flagged
-          - red when flagged
-          - toggleable
-          - disabled while mutation in flight to avoid racey double-clicks */}
+      {/* Flag icon button */}
       <button
         type="button"
         onClick={onToggleFlag}
@@ -124,8 +75,6 @@ export function ImageActions(props: { imageId: number }) {
         aria-label={isFlagged ? "Unflag image" : "Flag image"}
         title={isFlagged ? "Unflag" : "Flag as problematic"}
       >
-        {/* Inline SVG flag so we add zero deps.
-            Color changes by state. */}
         <svg
           xmlns="http:/www.w3.org/2000/svg"
           viewBox="0 0 24 24"
@@ -140,8 +89,7 @@ export function ImageActions(props: { imageId: number }) {
       </button>
 
       {/* Download button */}
-      {/* We hit our own infra route so we can force Content-Disposition: attachment.
-        This is the reliable fix for “opens in new tab”. */}
+      {/* Hit own infra route to force Content-Disposition: attachment */}
       <a
         href={`/api/images/${props.imageId}/download`}
         className={[
