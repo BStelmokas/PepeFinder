@@ -200,8 +200,7 @@ export function normalizeTagName(rawTag: string): string | null {
   // An empty string is not a valid tag.
   if (normalized.length === 0) return null;
 
-  // If the tag *is itself* a stopword, drop it.
-  // Example: "the" -> null
+  // If the tag is a stopword, drop it.
   if (DEFAULT_STOPWORDS.has(normalized)) return null;
 
   // Tags in this model must be a single token.
@@ -212,30 +211,11 @@ export function normalizeTagName(rawTag: string): string | null {
 }
 
 /**
- * ✅ PROPOSED CHANGE:
- * Expand a *single normalized token* into itself + its hyphen-split components.
- *
- * Goal:
- * - If a stored tag is "film-noir", we ALSO want "film" and "noir" on the same image.
- * - This makes queries like "film noir" match images tagged with "film-noir".
- *
- * Critical design constraints:
- * - We DO NOT change tokenization semantics:
- *   tokenizeQuery("film-noir") still yields ["film-noir"] (one token).
- * - Instead, we enforce a *storage invariant*:
- *   hyphenated tokens imply additional atomic tokens.
- *
- * Rules:
- * - If there is no hyphen, return [token].
- * - If there is a hyphen, split on "-" and keep only valid parts.
- * - We never drop the original hyphenated token.
- *
- * Why validate parts with normalizeTagName()?
- * - Keeps behavior consistent with all other rules (ASCII, stopwords, etc.).
- * - Example: "a-b" would produce "a" which is a stopword → we skip that part.
+ * Expand a hyphenated token into itself + its hyphen-split components.
+ * "film-noir" => "film-noir", "film", "noir"
  */
 export function expandHyphenatedToken(normalizedSingleToken: string): string[] {
-  // Fast path: most tokens aren’t hyphenated.
+  // Most tokens aren’t hyphenated.
   if (!normalizedSingleToken.includes("-")) return [normalizedSingleToken];
 
   // Split into candidate parts.
