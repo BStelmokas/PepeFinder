@@ -63,26 +63,26 @@ export const env = createEnv({
      * Reddit API
      */
     // Reddit script authentication (manual batch only).
-    // REDDIT_CLIENT_ID: z.string().min(1).optional(),
-    // REDDIT_CLIENT_SECRET: z.string().min(1).optional(),
-    // REDDIT_USERNAME: z.string().min(1).optional(),
-    // REDDIT_PASSWORD: z.string().min(1).optional(),
+    REDDIT_CLIENT_ID: z.string().min(1).optional(),
+    REDDIT_CLIENT_SECRET: z.string().min(1).optional(),
+    REDDIT_USERNAME: z.string().min(1).optional(),
+    REDDIT_PASSWORD: z.string().min(1).optional(),
 
     /**
      * Reddit requires a descriptive User-Agent; generic ones get throttled harder. (e.g. "pepefinder:ingest:v1 (by u/username)")
      */
-    // REDDIT_USER_AGENT: z.string().min(1).optional(),
+    REDDIT_USER_AGENT: z.string().min(1).optional(),
 
     // Script knobs (manual runs).
-    // REDDIT_SUBREDDIT: z.string().min(1).optional().default("pepethefrog"),
-    // REDDIT_SORT: z.enum(["new", "top"]).optional().default("new"),
-    // REDDIT_LIMIT: z.coerce
-    //   .number()
-    //   .int()
-    //   .min(1)
-    //   .max(100)
-    //   .optional()
-    //   .default(25),
+    REDDIT_SUBREDDIT: z.string().min(1).optional().default("pepethefrog"),
+    REDDIT_SORT: z.enum(["new", "top"]).optional().default("new"),
+    REDDIT_LIMIT: z.coerce
+      .number()
+      .int()
+      .min(1)
+      .max(100)
+      .optional()
+      .default(25),
   },
 
   client: {
@@ -112,15 +112,15 @@ export const env = createEnv({
     OPENAI_VISION_MODEL: process.env.OPENAI_VISION_MODEL,
     OPENAI_VISION_TIMEOUT_MS: process.env.OPENAI_VISION_TIMEOUT_MS,
 
-    // REDDIT_CLIENT_ID: process.env.REDDIT_CLIENT_ID,
-    // REDDIT_CLIENT_SECRET: process.env.REDDIT_CLIENT_SECRET,
-    // REDDIT_USERNAME: process.env.REDDIT_USERNAME,
-    // REDDIT_PASSWORD: process.env.REDDIT_PASSWORD,
-    // REDDIT_USER_AGENT: process.env.REDDIT_USER_AGENT,
+    REDDIT_CLIENT_ID: process.env.REDDIT_CLIENT_ID,
+    REDDIT_CLIENT_SECRET: process.env.REDDIT_CLIENT_SECRET,
+    REDDIT_USERNAME: process.env.REDDIT_USERNAME,
+    REDDIT_PASSWORD: process.env.REDDIT_PASSWORD,
+    REDDIT_USER_AGENT: process.env.REDDIT_USER_AGENT,
 
-    // REDDIT_SUBREDDIT: process.env.REDDIT_SUBREDDIT,
-    // REDDIT_SORT: process.env.REDDIT_SORT,
-    // REDDIT_LIMIT: process.env.REDDIT_LIMIT,
+    REDDIT_SUBREDDIT: process.env.REDDIT_SUBREDDIT,
+    REDDIT_SORT: process.env.REDDIT_SORT,
+    REDDIT_LIMIT: process.env.REDDIT_LIMIT,
 
     SCRAPER_USER_AGENT: process.env.SCRAPER_USER_AGENT,
   },
