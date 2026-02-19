@@ -1,26 +1,17 @@
 /**
- * Reddit ingestion from pre-scraped JSON files (manual batch only).
+ * Generic multi-source ingestion script for scraped JSON image links.
  *
  * Why this exists:
- * - I used an alternative way to scrape the images since Reddit gated the API.
- * - A a clean, idempotent, takedown-ready ingestion path is still wanted.
+ *  - Reddit started gating its API (Pinterest never had one open)
+ *  - In response, images were scraped through alternative means (i.e. Apify) and now sit as links inside .json files
  *
- * What this script does:
- * 1) Reads all .json files in a folder
- * 2) Extracts `{ url: string }` entries
- * 3) Filters to "likely direct image URLs" (ignore non-images)
- * 4) Downloads the bytes (server-side)
- * 5) Computes SHA-256 for dedupe + deterministic object keys
- * 6) Uploads to S3
- * 7) Inserts images row with minimal attribution (sourceUrl preserved)
- * 8) Enqueues tag_jobs (bounded by kill switch + daily cap)
- *
- * IMPORTANT constraints honored:
- * - Manual run only (no daemon)
- * - Fixed maximum work per run (operator-controlled)
- * - Idempotent via sha256 uniqueness (primary)
- * - Best-effort idempotent via sourceUrl check (secondary)
- * - No model calls here
+ * Design:
+ * - One generic ingestion pipeline.
+ * - A small per-source configuration layer defines only what differs:
+ *   - which JSON field contains the image URL (e.g. "url" vs "imageURL")
+ *   - which hostnames are allowed (CDN allowlist)
+ *   - which `images.source` marker to store in the database
+ *   - which S3 key prefix to use for uploaded objects
  */
 
 import fs from "node:fs/promises";
@@ -32,45 +23,44 @@ import { images, tagJobs } from "~/server/db/schema";
 import { putObject, publicUrlForKey } from "~/server/storage/s3";
 import { eq, sql } from "drizzle-orm";
 
-/**
- * Types: matches the scraped JSON format.
- */
-type ScrapedEntry = { url: string };
+// Small config map that isolates “source-specific” differences.
+const SOURCE_CONFIG = {
+  reddit: {
+    displayName: "reddit",
+    dbSource: "reddit_scrape",
+    urlField: "url",
+    allowedHosts: ["i.redd.it", "preview.redd.it", "i.imgur.com"],
+    s3Prefix: "images/reddit-scrape",
+  },
+  pinterest: {
+    displayName: "pinterest",
+    dbSource: "pinterest_scrape",
+    urlField: "imageURL",
+    allowedHosts: ["i.pinimg.com"],
+    s3Prefix: "images/pinterest-scrape",
+  },
+} as const;
 
-/**
- * Only ingest these extensions (strict).
- * Why strict:
- * - avoids accidentally ingesting videos, HTML pages, etc.
- * - keeps downloads smaller and predictable
- */
+// A union of valid source keys.
+type SourceKey = keyof typeof SOURCE_CONFIG;
+
+// Allowed file formats for ingestion.
 const ALLOWED_EXT = new Set(["jpg", "jpeg", "png", "webp"]);
 
-/**
- * Verify content-type after download to prevent "url says .jpg but it's HTML".
- * This blocks a common scraping failure mode.
- */
+// Allowed content-types for downloaded bytes.
 const ALLOWED_CONTENT_TYPES = new Set([
   "image/jpeg",
   "image/png",
   "image/webp",
 ]);
 
-/**
- * Safety cap: max bytes per image download.
- * This prevents one malicious or broken URL from blowing memory/cost.
- */
+// Safety cap on download size.
 const MAX_DOWNLOAD_BYTES = 8 * 1024 * 1024;
 
-/**
- * Safety cap: max number of URLs processed per run.
- *
- * Default to 250 per run.
- */
+// Batch discipline
 const DEFAULT_MAX_PER_RUN = 250;
 
-/**
- * Parse file extension from a URL’s path.
- */
+// Parse file extension from a URL’s path.
 function extFromUrl(url: string): string | null {
   try {
     const u = new URL(url);
@@ -84,43 +74,30 @@ function extFromUrl(url: string): string | null {
   }
 }
 
-/**
- * Decide whether a URL is worth attempting.
- *
- * Restrict to “direct image” hosts by default.
- * - i.redd.it is for Reddit-hosted images
- *
- * Why:
- * - avoids wasting time on "tessprint7.com" or YouTube links
- * - reduces bad downloads, timeouts, and HTML masquerading as images
- */
-function isLikelyDirectImageUrl(url: string): boolean {
+// Generic host + extension filter using per-source config.
+function isLikelyAllowedImageUrl(
+  url: string,
+  allowedHosts: readonly string[],
+): boolean {
   try {
     const u = new URL(url);
     const host = u.hostname.toLowerCase();
     const ext = extFromUrl(url);
 
     if (!ext) return false;
-
-    return host === "i.redd.it";
+    return allowedHosts.includes(host);
   } catch {
     return false;
   }
 }
 
-/**
- * Compute SHA-256 hex digest from bytes.
- * This is the primary dedupe key and deterministic storage identity.
- */
+// Compute SHA-256 hex digest from bytes.
 function sha256Hex(bytes: Uint8Array): string {
   return crypto.createHash("sha256").update(bytes).digest("hex");
 }
 
-/**
- * Idempotent job enqueue:
- * - unique(image_id) ensures no duplicates
- * - never call the model here
- */
+// Idempotent job enqueue.
+// unique(image_id) ensures no duplicates.
 async function enqueueJob(imageId: number): Promise<void> {
   await db
     .insert(tagJobs)
@@ -128,18 +105,15 @@ async function enqueueJob(imageId: number): Promise<void> {
     .onConflictDoNothing();
 }
 
-/**
- * Download bytes and validate content-type and size.
- */
+// Download image bytes and validate content-type and size.
 async function downloadImageBytes(
   url: string,
 ): Promise<{ bytes: Uint8Array; contentType: string }> {
   const headers: Record<string, string> = {};
 
-  // If env var is present, include it. If not, omit the header entirely.
-  // (In env.ts REDDIT_USER_AGENT is validated as required, but this is still defensive.)
-  if (env.REDDIT_USER_AGENT) {
-    headers["User-Agent"] = env.REDDIT_USER_AGENT;
+  // If env var is present, include it.
+  if (env.SCRAPER_USER_AGENT) {
+    headers["User-Agent"] = env.SCRAPER_USER_AGENT;
   }
 
   const res = await fetch(url, {
@@ -155,7 +129,6 @@ async function downloadImageBytes(
     res.headers.get("content-type")?.split(";")[0]?.trim() ?? "";
 
   if (!ALLOWED_CONTENT_TYPES.has(contentType)) {
-    // If this triggers a lot, it’s a sign the script is hitting HTML pages or non-images.
     throw new Error(`Unsupported content-type: ${contentType || "unknown"}`);
   }
 
@@ -169,12 +142,11 @@ async function downloadImageBytes(
   return { bytes: buf, contentType };
 }
 
-/**
- * Read all scraped entries from every .json file in a folder.
- *
- * Expected file format: JSON array of { url: string } objects.
- */
-async function readUrlsFromFolder(folder: string): Promise<string[]> {
+// Read all scraped entries from every .json file in a folder.
+async function readUrlsFromFolder(
+  folder: string,
+  urlField: string,
+): Promise<string[]> {
   const entries = await fs.readdir(folder, { withFileTypes: true });
 
   const jsonFiles = entries
@@ -202,7 +174,8 @@ async function readUrlsFromFolder(folder: string): Promise<string[]> {
     }
 
     for (const item of parsed) {
-      const url = (item as ScrapedEntry)?.url;
+      // "Any" is intentional here because these are offline operator files.
+      const url = (item as any)?.[urlField];
       if (typeof url === "string" && url.length > 0) {
         urls.push(url);
       }
@@ -216,47 +189,63 @@ async function readUrlsFromFolder(folder: string): Promise<string[]> {
  * MAIN
  *
  * CLI:
- * - folder path can be passed as argv[2]
- * - otherwise uses env.REDDIT_SCRAPE_DIR
- * - optional max per run via argv[3]
+ *   pnpm ingest:files <source> <folder> [maxPerRun]
  *
  * Examples:
- *   pnpm reddit:ingest:files "/path/to/folder" 200
- *   REDDIT_SCRAPE_DIR="/path/to/folder" pnpm reddit:ingest:files
+ *   pnpm ingest:files reddit "/path/to/reddit-folder" 10000
+ *   pnpm ingest:files pinterest "/path/to/pinterest-folder" 8000
  */
 async function main(): Promise<void> {
-  const folder = process.argv[2] ?? env.REDDIT_SCRAPE_DIR;
+  const sourceKey = process.argv[2] as SourceKey | undefined;
+  const folder = process.argv[3];
+  const maxPerRun = Number(process.argv[4] ?? DEFAULT_MAX_PER_RUN);
 
-  if (!folder) {
+  // Validate source selection.
+  if (!sourceKey || !(sourceKey in SOURCE_CONFIG)) {
     console.error(
-      "Missing folder path. Provide as argv or set REDDIT_SCRAPE_DIR in .env.\n" +
-        "Usage: pnpm reddit:ingest:files /path/to/folder [maxPerRun]",
+      `Missing/invalid source.\n` +
+        `Usage: pnpm ingest:files <${Object.keys(SOURCE_CONFIG).join("|")}> <folder> [maxPerRun]\n` +
+        `Example: pnpm ingest:files reddit "/path/to/folder" 1000`,
     );
     process.exit(1);
   }
 
-  const maxPerRun = Number(process.argv[3] ?? DEFAULT_MAX_PER_RUN);
-  if (!Number.isFinite(maxPerRun) || maxPerRun <= 0) {
-    throw new Error(`Invalid maxPerRun: ${process.argv[3]}`);
+  // Validate folder.
+  if (!folder) {
+    console.error(
+      `Missing folder.\nUsage: pnpm ingest:files ${sourceKey} <folder> [maxPerRun]`,
+    );
+    process.exit(1);
   }
 
+  // Validate maxPerRun.
+  if (!Number.isFinite(maxPerRun) || maxPerRun <= 0) {
+    throw new Error(`Invalid maxPerRun: ${process.argv[4]}`);
+  }
+
+  const cfg = SOURCE_CONFIG[sourceKey];
+
   console.log("=== PepeFinder ingest from scraped files ===");
+  console.log(`source=${cfg.displayName} dbSource=${cfg.dbSource}`);
   console.log(`folder=${folder}`);
   console.log(`maxPerRun=${maxPerRun}`);
 
-  const allUrls = await readUrlsFromFolder(folder);
+  // 1) Read raw URLs from files.
+  const allUrls = await readUrlsFromFolder(folder, cfg.urlField);
 
-  // De-dupe URLs early to avoid repeated work across 5 files.
+  // 2) De-dupe early to avoid repeated work across multiple files.
   const uniqueUrls = Array.from(new Set(allUrls));
 
-  // Filter down to likely direct image URLs (host + extension).
-  const candidateUrls = uniqueUrls.filter(isLikelyDirectImageUrl);
+  // 3) Filter down to likely direct image URLs (host + extension).
+  const candidateUrls = uniqueUrls.filter((u) =>
+    isLikelyAllowedImageUrl(u, cfg.allowedHosts),
+  );
 
   console.log(
     `found=${allUrls.length} unique=${uniqueUrls.length} candidates=${candidateUrls.length}`,
   );
 
-  // Cap the run to maxPerRun (manual batch discipline).
+  // 4) Cap the work to maxPerRun (manual batch discipline).
   const toProcess = candidateUrls.slice(0, maxPerRun);
 
   console.log(
@@ -279,7 +268,7 @@ async function main(): Promise<void> {
         .select({ id: images.id })
         .from(images)
         .where(
-          sql`${images.source} = 'reddit_scrape' AND ${images.sourceUrl} = ${url}`,
+          sql`${images.source} = ${cfg.dbSource} AND ${images.sourceUrl} = ${url}`,
         )
         .limit(1);
 
@@ -288,6 +277,7 @@ async function main(): Promise<void> {
         continue;
       }
 
+      // Extension gate: quick skip before any network work.
       const ext = extFromUrl(url);
       if (!ext) {
         skipped++;
@@ -309,10 +299,10 @@ async function main(): Promise<void> {
         continue;
       }
 
-      // Deterministic key: uses sha + ext.
-      // Namespace under images/reddit-scrape/ to distinguish from API ingestion.
-      const objectKey = `images/reddit-scrape/${sha}.${ext}`;
+      // Deterministic key.
+      const objectKey = `${cfg.s3Prefix}/${sha}.${ext}`;
 
+      // Upload bytes to S3.
       await putObject({ key: objectKey, body: bytes, contentType });
 
       // Store a renderable storageKey if public URL is configured; else store raw object key.
@@ -327,12 +317,9 @@ async function main(): Promise<void> {
           sha256: sha,
           status: "pending",
 
-          // Mark origin clearly.
-          source: "reddit_scrape",
-
-          // It's not possible to get post_id from i.redd.it URL alone.
-          // Keep sourceRef null and store the raw URL in sourceUrl.
-          sourceRef: null,
+          // Provenance markers.
+          source: cfg.dbSource,
+          sourceRef: null, // Stable IDs do not exist in these scrape formats.
           sourceUrl: url,
         })
         .returning({ id: images.id });
@@ -347,6 +334,7 @@ async function main(): Promise<void> {
         `ingested image_id=${imageId} sha=${sha.slice(0, 8)}… enqueued=true`,
       );
     } catch (e) {
+      // Per-item soft failure.
       const msg = e instanceof Error ? e.message : String(e);
       console.warn(`skip url=${url} reason=${msg}`);
       skipped++;

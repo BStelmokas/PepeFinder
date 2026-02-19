@@ -28,7 +28,7 @@ PepeFinder is no longer a toy MVP. It now includes:
 - Real vision model integration (caption + structured tags)
 - Caption storage + caption-as-tag indexing
 - Cost caps + kill switch + strict model timeouts
-- Manual Reddit ingestion (archived datasets, 6k+ processed)
+- Manual Reddit / Pinterest ingestion (archived datasets, 12k+ processed)
 - Production health endpoint
 - Responsive UI (desktop + mobile refinements)
 - Download endpoint with forced attachment streaming
@@ -297,7 +297,7 @@ No duplicate tagging jobs.
 
 ---
 
-## 2.4 Manual Reddit ingestion (no crawler infra)
+## 2.4 Manual Reddit / Pinterest ingestion (no crawler infra)
 
 - Batch-only ingestion.
 - Fixed archives.

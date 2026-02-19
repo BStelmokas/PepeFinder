@@ -10,10 +10,12 @@ export const env = createEnv({
 
     // Canonical app URL used for OpenGraph/Twitter metadata.
     APP_URL: z.string().url().optional().default("http://localhost:3000"),
-
     // For sitemap.
     SITE_URL: z.string().url().optional(),
 
+    /**
+     * S3
+     */
     // Endpoint is required for S3-compatible providers (R2/MinIO/etc).
     S3_ENDPOINT: z.string().url().optional(),
 
@@ -51,32 +53,36 @@ export const env = createEnv({
       .max(180_000) // sanity ceiling: 3mins max (prevents runaway hangs)
       .default(15_000),
 
+    /**
+     * Offline scraper
+     */
+    // Generic user agent for all ingestion HTTP requests.
+    SCRAPER_USER_AGENT: z.string().min(1).optional(),
+
+    /**
+     * Reddit API
+     */
     // Reddit script authentication (manual batch only).
-    REDDIT_CLIENT_ID: z.string().min(1).optional(),
-    REDDIT_CLIENT_SECRET: z.string().min(1).optional(),
-    REDDIT_USERNAME: z.string().min(1).optional(),
-    REDDIT_PASSWORD: z.string().min(1).optional(),
+    // REDDIT_CLIENT_ID: z.string().min(1).optional(),
+    // REDDIT_CLIENT_SECRET: z.string().min(1).optional(),
+    // REDDIT_USERNAME: z.string().min(1).optional(),
+    // REDDIT_PASSWORD: z.string().min(1).optional(),
 
     /**
      * Reddit requires a descriptive User-Agent; generic ones get throttled harder. (e.g. "pepefinder:ingest:v1 (by u/username)")
      */
-    REDDIT_USER_AGENT: z.string().min(1).optional(),
+    // REDDIT_USER_AGENT: z.string().min(1).optional(),
 
     // Script knobs (manual runs).
-    REDDIT_SUBREDDIT: z.string().min(1).optional().default("pepethefrog"),
-    REDDIT_SORT: z.enum(["new", "top"]).optional().default("new"),
-    REDDIT_LIMIT: z.coerce
-      .number()
-      .int()
-      .min(1)
-      .max(100)
-      .optional()
-      .default(25),
-
-    // Folder path containing pre-scraped JSON files.
-    // - keeps env validation from blocking dev if the script isn't used
-    // - allows passing the folder as a CLI argument instead
-    REDDIT_SCRAPE_DIR: z.string().min(1).optional(),
+    // REDDIT_SUBREDDIT: z.string().min(1).optional().default("pepethefrog"),
+    // REDDIT_SORT: z.enum(["new", "top"]).optional().default("new"),
+    // REDDIT_LIMIT: z.coerce
+    //   .number()
+    //   .int()
+    //   .min(1)
+    //   .max(100)
+    //   .optional()
+    //   .default(25),
   },
 
   client: {
@@ -106,17 +112,17 @@ export const env = createEnv({
     OPENAI_VISION_MODEL: process.env.OPENAI_VISION_MODEL,
     OPENAI_VISION_TIMEOUT_MS: process.env.OPENAI_VISION_TIMEOUT_MS,
 
-    REDDIT_CLIENT_ID: process.env.REDDIT_CLIENT_ID,
-    REDDIT_CLIENT_SECRET: process.env.REDDIT_CLIENT_SECRET,
-    REDDIT_USERNAME: process.env.REDDIT_USERNAME,
-    REDDIT_PASSWORD: process.env.REDDIT_PASSWORD,
-    REDDIT_USER_AGENT: process.env.REDDIT_USER_AGENT,
+    // REDDIT_CLIENT_ID: process.env.REDDIT_CLIENT_ID,
+    // REDDIT_CLIENT_SECRET: process.env.REDDIT_CLIENT_SECRET,
+    // REDDIT_USERNAME: process.env.REDDIT_USERNAME,
+    // REDDIT_PASSWORD: process.env.REDDIT_PASSWORD,
+    // REDDIT_USER_AGENT: process.env.REDDIT_USER_AGENT,
 
-    REDDIT_SUBREDDIT: process.env.REDDIT_SUBREDDIT,
-    REDDIT_SORT: process.env.REDDIT_SORT,
-    REDDIT_LIMIT: process.env.REDDIT_LIMIT,
+    // REDDIT_SUBREDDIT: process.env.REDDIT_SUBREDDIT,
+    // REDDIT_SORT: process.env.REDDIT_SORT,
+    // REDDIT_LIMIT: process.env.REDDIT_LIMIT,
 
-    REDDIT_SCRAPE_DIR: process.env.REDDIT_SCRAPE_DIR,
+    SCRAPER_USER_AGENT: process.env.SCRAPER_USER_AGENT,
   },
   /**
    * Run `build` or `dev` with `SKIP_ENV_VALIDATION` to skip env validation. This is especially

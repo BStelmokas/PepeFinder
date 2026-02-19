@@ -1,33 +1,26 @@
 /**
  * OpenAI vision tagger adapter (worker-only).
  *
- * This module is an *adapter*:
+ * This module is an adapter:
  * - It talks to OpenAI over HTTP (Responses API).
  * - It returns parsed, validated, normalized tag suggestions.
  *
  * Architectural boundaries:
- * - This module does NOT touch the database.
- * - This module does NOT check caps/kill-switch.
- *   Those are enforced in the worker *before* calling into this adapter.
+ * - This module does not touch the database.
+ * - This module does not check caps/kill-switch.
+ *   Those are enforced in the worker before calling into this adapter.
  *
- * Why this is important:
- * - It keeps “policy” (cost safety / queueing) separate from “integration” (OpenAI API).
+ * Architecture:
+ * - It keeps policy (cost safety / queueing) separate from integration (OpenAI API).
  * - It makes swapping providers later a single-module change.
  */
 
-import { env } from "~/env"; // Centralized env access; never read process.env outside env.ts.
-import {
-  tokenizeQuery, // ✅ KEY CHANGE: treat model “tag names” as phrases and tokenize them into atomic tags
-} from "~/lib/text/normalize";
+import { env } from "~/env";
+import { tokenizeQuery } from "~/lib/text/normalize";
 
 import { instruction } from "~/server/ai/taggingPrompt";
 
-/**
- * Allowed tag kinds from your prompt.
- *
- * We keep this as a union so TypeScript helps us maintain the contract.
- * If you later expand the taxonomy, you do it here in one place.
- */
+// Allowed tag kinds from the prompt.
 export type TagKind =
   | "emotion"
   | "object"
@@ -38,33 +31,20 @@ export type TagKind =
   | "setting"
   | "style";
 
-/**
- * A single tag predicted by the model.
- * We keep this shape small and explicit so swapping providers later is easy.
- * We validate/normalize before returning anything to the worker.
- */
+// A single tag predicted by the model.
 export type ModelTag = {
-  name: string; // Normalized tag name (lowercase ASCII etc.)
-  confidence: number; // 0..1 confidence; shown in UI but NOT used for ranking (frozen rule).
+  name: string; // Normalized tag name
+  confidence: number; // 0..1 confidence
   kind: TagKind; // One of the allowed kinds (validated)
 };
 
-/**
- * The overall JSON structure your new prompt requires.
- */
+// The overall JSON structure the prompt requires.
 export type ModelTaggingResult = {
-  caption: string; // Human-readable description (not used for ranking; not persisted yet)
+  caption: string; // Human-readable description
   tags: ModelTag[]; // Tag list with confidence + kind
 };
 
-/**
- * Minimal helper: type guard for allowed tag kinds.
- *
- * Why not Zod here?
- * - This is a narrow worker-only adapter.
- * - We already enforce correctness with very defensive runtime checks + defaults.
- * - Keeping deps minimal is part of the spec.
- */
+// Type guard for allowed tag kinds.
 function isTagKind(v: unknown): v is TagKind {
   return (
     v === "emotion" ||
@@ -78,34 +58,17 @@ function isTagKind(v: unknown): v is TagKind {
   );
 }
 
-/**
- * Tiny helper: is a value a plain object (record)?
- *
- * This is the core primitive for avoiding `(x as any)`:
- * - We never access properties on unknown until we prove it's an object.
- */
+// Is a value a plain object (record).
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null;
 }
 
-/**
- * Tiny helper: safe property read from an unknown record.
- *
- * Why it exists:
- * - ESLint forbids unsafe member access on `any`.
- * - Keeping everything as `unknown` + narrowing avoids those rules entirely.
- */
+// Safe property read from an unknown record.
 function getProp(obj: Record<string, unknown>, key: string): unknown {
   return obj[key];
 }
 
-/**
- * Extract the first assistant "output_text" block from the Responses API response.
- *
- * Why isolate this:
- * - OpenAI response shapes evolve; we want that churn in one place.
- * - The rest of the code should only care about the final string output.
- */
+// Extract the first assistant "output_text" block from the Responses API response.
 function extractFirstOutputText(resp: unknown): string {
   if (!isRecord(resp)) {
     throw new Error("OpenAI response was not an object.");

@@ -150,9 +150,9 @@ Curated dataset.
 - SHA-256 dedupe
 - Enqueues tag job
 
-## Reddit Archive Batch
+## Reddit / Pinterest Archive Batch
 
-- Direct image URLs only
+- Direct image URL ingestion only
 - Idempotent
 - Safe to re-run
 

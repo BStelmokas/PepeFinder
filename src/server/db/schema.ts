@@ -187,7 +187,7 @@ export const images = pgTable(
 
       /**
        * MVP2 idempotency by source post:
-       * Unique(source, source_ref) ensures we never create two DB rows for the same reddit post.
+       * Unique(source, source_ref) ensures we never create two DB rows for the same post.
        *
        * Postgres allows multiple NULLs in UNIQUE indexes, so this won’t break seed images
        * (which typically have null source/sourceRef).
