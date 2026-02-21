@@ -143,6 +143,84 @@ export function publicUrlForKey(key: string): string | null {
 }
 
 /**
+ * -------------------------
+ * Error-shape helpers
+ * -------------------------
+ *
+ * The AWS SDK v3 throws different error objects depending on:
+ * - the command
+ * - the runtime
+ * - the S3-compatible provider
+ *
+ * Strict ESLint rules mean we must NOT access properties on unknown values
+ * without narrowing first.
+ */
+
+/**
+ * Is the value a non-null object?
+ *
+ * This is the base primitive for safe "unknown" introspection.
+ */
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null;
+}
+
+/**
+ * Safe property read from a record.
+ *
+ * Why it exists:
+ * - avoids `as any`
+ * - avoids unsafe member access
+ */
+function getProp(obj: Record<string, unknown>, key: string): unknown {
+  return obj[key];
+}
+
+/**
+ * Extract `name` from an unknown error, if present.
+ */
+function getErrorName(err: unknown): string | undefined {
+  if (!isRecord(err)) return undefined;
+  const name = getProp(err, "name");
+  return typeof name === "string" ? name : undefined;
+}
+
+/**
+ * Extract `$metadata.httpStatusCode` from an unknown error, if present.
+ *
+ * AWS SDK v3 commonly attaches:
+ * { $metadata: { httpStatusCode: number, ... } }
+ */
+function getHttpStatusCode(err: unknown): number | undefined {
+  if (!isRecord(err)) return undefined;
+
+  const meta = getProp(err, "$metadata");
+  if (!isRecord(meta)) return undefined;
+
+  const code = getProp(meta, "httpStatusCode");
+  return typeof code === "number" ? code : undefined;
+}
+
+/**
+ * Extract a provider-specific error code.
+ *
+ * Different providers / SDK paths use different shapes:
+ * - err.Code (sometimes)
+ * - err.code (sometimes)
+ */
+function getProviderCode(err: unknown): string | undefined {
+  if (!isRecord(err)) return undefined;
+
+  const codeUpper = getProp(err, "Code");
+  if (typeof codeUpper === "string") return codeUpper;
+
+  const codeLower = getProp(err, "code");
+  if (typeof codeLower === "string") return codeLower;
+
+  return undefined;
+}
+
+/**
  * RECONCILE CHANGE:
  * Lightweight existence check (no body download).
  *
@@ -169,7 +247,13 @@ export async function headObjectExists(params: {
   const ac = new AbortController();
 
   // If the timer fires, the request is aborted and we treat that as an error.
-  const timer = setTimeout(() => ac.abort(), timeoutMs);
+  /**
+   * IMPORTANT:
+   * - We MUST clear this timer in a `finally` block.
+   * - Otherwise we leak timers in long-running processes,
+   *   and ESLint correctly warns that `timer` is unused if we never reference it.
+   */
+  const timer: NodeJS.Timeout = setTimeout(() => ac.abort(), timeoutMs);
 
   try {
     const cmd = new HeadObjectCommand({
@@ -177,38 +261,66 @@ export async function headObjectExists(params: {
       Key: params.key,
     });
 
-    await s3.send(cmd);
     // If HEAD succeeded, object exists.
+    await s3.send(cmd, { abortSignal: ac.signal });
     return true;
-  } catch (err) {
-    const anyErr = err as any;
-
-    // If we aborted due to timeout, we should throw (not silently treat as missing),
-    // because "timeout" != "object missing" and we don't want accidental deletes.
-    if (anyErr?.name === "AbortError") {
-      // Treat as "exists" so DO NOT delete it.
-      console.warn(`[HEAD TIMEOUT] key=${params.key}`);
+  } catch (err: unknown) {
+    /**
+     * Timeout behavior:
+     * If we aborted due to timeout, DO NOT treat that as "missing".
+     *
+     * Why:
+     * - A timeout could be transient network slowness.
+     * - Treating timeouts as missing would cause accidental deletes / data loss.
+     *
+     * So we "fail safe" by treating it as "exists" and logging a warning.
+     */
+    const name = getErrorName(err);
+    if (name === "AbortError") {
+      console.warn(
+        `[S3 HEAD TIMEOUT] key=${params.key} timeoutMs=${timeoutMs}`,
+      );
       return true;
     }
 
-    // AWS SDK v3 includes HTTP metadata on many errors.
-    const httpStatus = anyErr?.$metadata?.httpStatusCode;
+    // AWS SDK v3 often includes HTTP status metadata.
+    const httpStatus = getHttpStatusCode(err);
 
-    // Different S3-compatible implementations use different codes/names.
-    const name = anyErr?.name;
-    const code = anyErr?.Code ?? anyErr?.code;
+    // Provider-specific string codes (vary by vendor).
+    const providerCode = getProviderCode(err);
 
-    // Treat “not found” as non-fatal “missing object”.
+    // Some providers also use name="NotFound".
+    const errName = name;
+
+    /**
+     * Treat “not found” as non-fatal “missing object”.
+     *
+     * This is intentionally conservative:
+     * - 404 is the clearest signal
+     * - some providers use NotFound / NoSuchKey
+     */
     if (
       httpStatus === 404 ||
-      name === "NotFound" ||
-      code === "NotFound" ||
-      code === "NoSuchKey"
+      errName === "NotFound" ||
+      providerCode === "NotFound" ||
+      providerCode === "NoSuchKey"
     ) {
       return false;
     }
 
-    // Anything else is suspicious: fail loudly.
+    /**
+     * Anything else is suspicious: fail loudly:
+     * - auth errors
+     * - endpoint misconfig
+     * - transient network failures
+     *
+     * In those cases, throwing is correct because:
+     * - the caller should stop the repair process
+     * - we don't want to take destructive action on uncertain information
+     */
     throw err;
+  } finally {
+    // Always clear timer to prevent leaks (and satisfy eslint that it's used).
+    clearTimeout(timer);
   }
 }
