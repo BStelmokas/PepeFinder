@@ -4,17 +4,13 @@
  * Responsibility:
  * - Fetch a single image by ID (for the /image/[id] page).
  * - Fetch that image’s tags ordered by confidence desc (UI detail view).
- *
- * Why it’s a separate router:
- * - Keeps the API surface modular and discoverable.
- * - Avoids a “god router” where unrelated procedures pile up.
  */
 
-import { z } from "zod"; // Runtime validation for inputs at the boundary.
-import { desc, eq, sql } from "drizzle-orm"; // Typed SQL operators.
-import { TRPCError } from "@trpc/server"; // Canonical error type for tRPC (maps cleanly to HTTP in Next).
-import { createTRPCRouter, publicProcedure } from "~/server/api/trpc"; // T3 router/procedure primitives.
-import { imageTags, images, tags } from "~/server/db/schema"; // Table definitions (source of truth).
+import { z } from "zod";
+import { desc, eq, sql } from "drizzle-orm";
+import { TRPCError } from "@trpc/server";
+import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
+import { imageTags, images, tags } from "~/server/db/schema";
 import { createPresignedGetUrl, publicUrlForKey } from "~/server/storage/s3";
 
 export const imageRouter = createTRPCRouter({
@@ -25,31 +21,21 @@ export const imageRouter = createTRPCRouter({
    * - { id: number }
    *
    * Output:
-   * - image: { id, storageKey, sha256, status, createdAt, updatedAt, source?, sourceRef? }
+   * - image: { id, storageKey, sha256, status, createdAt, updatedAt, caption, source?, sourceRef? }
    * - tags: Array<{ id, name, confidence, createdAt }>
    *
    * Ordering:
    * - tags ordered by confidence DESC (then name as a stable tie-breaker)
-   *
-   * Note:
-   * - Even if an image is "pending" or "failed", it should be viewable by ID.
-   * - Search results will only include "indexed", but detail pages can show status.
    */
   getById: publicProcedure
     .input(
       z.object({
-        // IDs are numeric in our schema (serial int).
+        // IDs are numeric in the schema (serial int).
         id: z.number().int().positive(),
       }),
     )
     .query(async ({ ctx, input }) => {
-      /**
-       * Step 1: fetch the image row.
-       *
-       * We do this first so we can:
-       * - return NOT_FOUND cleanly if the image doesn’t exist
-       * - avoid doing the tag join work unnecessarily
-       */
+      // Step 1: fetch the image row.
       const imageRow = await ctx.db
         .select({
           id: images.id,
@@ -77,13 +63,13 @@ export const imageRouter = createTRPCRouter({
       }
 
       /**
-       * renderUrl logic (minimal, practical):
-       * - If storageKey looks like a URL/path (starts with "http" or "/"), render directly.
+       * renderUrl logic:
+       * - If storageKey looks like a URL/path, render directly.
        * - If storageKey looks like an S3 object key (e.g. "images/<sha>.png"), then:
        *   - use public base url if available
        *   - else generate a short-lived signed GET URL
        *
-       * This keeps MVP1 usable even if your bucket is private.
+       * Future-proof for any type of bucket privacy.
        */
       let renderUrl: string;
 
@@ -104,14 +90,7 @@ export const imageRouter = createTRPCRouter({
           }));
       }
 
-      /**
-       * Step 2: fetch tags for this image ordered by confidence DESC.
-       *
-       * Why this query shape?
-       * - image_tags is the join table; tags provides the human-readable name.
-       * - We keep joins minimal (image_tags -> tags).
-       * - We rely on our index (image_id, confidence DESC) for performance.
-       */
+      // Step 2: fetch tags for this image ordered by confidence DESC.
       const tagRows = await ctx.db
         .select({
           id: tags.id,
@@ -123,7 +102,7 @@ export const imageRouter = createTRPCRouter({
         .innerJoin(tags, eq(imageTags.tagId, tags.id))
         .where(eq(imageTags.imageId, input.id))
         .orderBy(
-          // Highest-confidence tags first (best UX for “generated tags + confidence”).
+          // Highest-confidence tags first.
           desc(imageTags.confidence),
 
           // Stable ordering when confidence ties (prevents UI jitter across runs).
@@ -148,13 +127,6 @@ export const imageRouter = createTRPCRouter({
    * Behavior:
    * - if flagged=true  -> increment flag_count by 1
    * - if flagged=false -> decrement flag_count by 1 (but clamp at 0)
-   *
-   * Why clamp:
-   * - No auth means clients can misbehave.
-   * - We keep DB invariant: flag_count never negative.
-   *
-   * IMPORTANT:
-   * - This is a soft signal, not a security boundary.
    */
   setFlag: publicProcedure
     .input(
@@ -167,7 +139,6 @@ export const imageRouter = createTRPCRouter({
       const delta = input.flagged ? 1 : -1;
 
       // Atomic update, clamped at 0, all in SQL.
-      // This avoids race conditions and prevents negative counts.
       const updated = await ctx.db
         .update(images)
         .set({
@@ -180,7 +151,6 @@ export const imageRouter = createTRPCRouter({
       const row = updated[0];
       if (!row) {
         // If image doesn't exist, treat like "not found".
-        // We keep this minimal instead of throwing a custom error type.
         return null;
       }
 

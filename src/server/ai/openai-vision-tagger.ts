@@ -58,7 +58,7 @@ function isTagKind(v: unknown): v is TagKind {
   );
 }
 
-// Is a value a plain object (record).
+// Is a value a plain object (record)?
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null;
 }
@@ -109,31 +109,12 @@ function extractFirstOutputText(resp: unknown): string {
   throw new Error("OpenAI response contained no assistant output_text.");
 }
 
-/**
- * Parse the model JSON output into our typed ModelTaggingResult.
+/*
+ * Parse the model JSON output into the typed ModelTaggingResult.
  *
- * This is where we enforce:
- * - top-level object shape
- * - caption is a string
- * - tags is an array of objects with name/confidence/kind
- * - confidence is clamped
- * - name is normalized
- * - tags are de-duped
- *
- * Doing this parsing in a separate function keeps tagImageWithOpenAI() readable.
- */
-/**
- * Parse model JSON into ModelTaggingResult.
- *
- * ✅ KEY CHANGE:
- * - We DO NOT force model tag names to be single tokens directly.
- * - We treat them as free-form phrases, then run tokenizeQuery(name).
- *
- * Why this is the “correct” architecture:
- * - tokenizeQuery is your frozen semantic contract.
- * - Queries and tags must speak the same “language” (same normalization + stopwords).
- * - If the model outputs "a sad frog", tokenizeQuery yields ["sad","frog"].
- * - Those become stored primitives, matching how user searches work.
+ * Important:
+ * - Do not force model tag names to be single tokens directly.
+ * - Treat them as free-form phrases, then run tokenizeQuery(name).
  */
 function parseModelJson(outputText: string): ModelTaggingResult {
   let parsed: unknown;
@@ -183,7 +164,7 @@ function parseModelJson(outputText: string): ModelTaggingResult {
     const clampedConfidence = Math.max(0, Math.min(1, confidenceVal));
 
     /**
-     * ✅ The core: split the model name into normalized tokens.
+     * Split the model name into normalized tokens.
      * This automatically:
      * - trims/collapses whitespace
      * - lowercases ASCII
@@ -226,39 +207,23 @@ function parseModelJson(outputText: string): ModelTaggingResult {
   };
 }
 
-/**
- * Call OpenAI vision and return {caption, tags[]} according to your new prompt.
- *
- * This function:
- * - enforces hard timeout per call (fail-closed)
- * - enforces strict JSON parsing
- * - normalizes tags using frozen normalizeTagName()
- * - de-dupes by tag name, keeping the highest confidence
- * - clamps confidence to [0, 1]
- *
- * What it deliberately does NOT do:
- * - no DB writes
- * - no queue logic
- * - no cap/kill-switch checks
- */
+// Call OpenAI vision and return {caption, tags[]}.
 export async function tagImageWithOpenAI(params: {
-  imageUrl: string; // Must be a fully-qualified URL; can be public or pre-signed.
+  imageUrl: string;
 }): Promise<ModelTaggingResult> {
-  // We enforce a strict per-call timeout to keep spend and worker latency bounded.
-  // If the model is slow or the network stalls, we fail-closed.
+  // Enforce a strict per-call timeout to keep spend and worker latency bounded.
+  // If the model is slow or the network stalls, fail-closed.
   const timeoutMs = env.OPENAI_VISION_TIMEOUT_MS;
 
-  // AbortSignal.timeout() is available in Node 20; it produces an AbortSignal that aborts after N ms.
-  // This is our “hard stop” guarantee.
   const signal = AbortSignal.timeout(timeoutMs);
 
   /**
    * OpenAI Responses API call:
-   * We send a “user message” whose content contains:
-   * - input_text (our instructions)
+   * Send it a “user message” whose content contains:
+   * - input_text (the instructions)
    * - input_image (the URL)
    *
-   * This is straight from OpenAI’s vision docs.
+   * (OpenAI’s vision docs)
    */
   const body = {
     model: env.OPENAI_VISION_MODEL,
@@ -272,14 +237,14 @@ export async function tagImageWithOpenAI(params: {
       },
     ],
 
-    // Temperature 0 pushes the model toward more deterministic outputs (fewer “creative” tags).
+    // Temperature 0 pushes the model toward more deterministic outputs.
     temperature: 0,
 
-    // Hard cap on output tokens: we only want a small JSON array.
+    // Hard cap on output tokens.
     max_output_tokens: 3000,
 
     // Ask OpenAI to treat the text output as plain text.
-    // We enforce JSON-ness ourselves via the instruction + parsing.
+    // Enforce JSON-ness here via the instruction + parsing.
     text: { format: { type: "text" } },
   };
 
@@ -294,7 +259,7 @@ export async function tagImageWithOpenAI(params: {
     signal, // The strict timeout enforcement.
   });
 
-  // If OpenAI returns an error (429, 401, 500, etc.), we surface a trimmed error to the worker.
+  // If OpenAI returns an error (429, 401, 500, etc.), surface a trimmed error to the worker.
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     throw new Error(
@@ -303,7 +268,7 @@ export async function tagImageWithOpenAI(params: {
   }
 
   /**
-   * Responses API response shape (important for parsing):
+   * Responses API response shape:
    * The assistant output is in response.output[] items of type "message",
    * and the text content parts are type "output_text" with a .text field.
    */

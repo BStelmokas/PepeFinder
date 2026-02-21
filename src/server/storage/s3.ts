@@ -12,6 +12,7 @@ import {
   PutObjectCommand,
   GetObjectCommand,
   DeleteObjectCommand,
+  HeadObjectCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
@@ -139,4 +140,75 @@ export function publicUrlForKey(key: string): string | null {
   const base = env.S3_PUBLIC_BASE_URL.replace(/\/+$/, "");
   const cleanKey = key.replace(/^\/+/, "");
   return `${base}/${cleanKey}`;
+}
+
+/**
+ * RECONCILE CHANGE:
+ * Lightweight existence check (no body download).
+ *
+ * Why this function exists:
+ * - I manually deleted objects in Cloudflare R2.
+ * - The DB still points at them.
+ * - The repair script needs a cheap way to ask: “does this key exist?”
+ *
+ * Returns:
+ * - true if object exists
+ * - false if object does not exist (404 / NoSuchKey / NotFound)
+ *
+ * Throws:
+ * - for other errors (auth, networking, endpoint misconfig)
+ *   because those mean “we can’t trust our check”.
+ */
+export async function headObjectExists(params: {
+  key: string;
+  requestTimeoutMs?: number;
+}): Promise<boolean> {
+  const timeoutMs = params.requestTimeoutMs ?? 10_000; // 10s default: long enough for R2, short enough to avoid hangs
+
+  // AbortController lets us cancel the HTTP request if it stalls.
+  const ac = new AbortController();
+
+  // If the timer fires, the request is aborted and we treat that as an error.
+  const timer = setTimeout(() => ac.abort(), timeoutMs);
+
+  try {
+    const cmd = new HeadObjectCommand({
+      Bucket: env.S3_BUCKET,
+      Key: params.key,
+    });
+
+    await s3.send(cmd);
+    // If HEAD succeeded, object exists.
+    return true;
+  } catch (err) {
+    const anyErr = err as any;
+
+    // If we aborted due to timeout, we should throw (not silently treat as missing),
+    // because "timeout" != "object missing" and we don't want accidental deletes.
+    if (anyErr?.name === "AbortError") {
+      // Treat as "exists" so DO NOT delete it.
+      console.warn(`[HEAD TIMEOUT] key=${params.key}`);
+      return true;
+    }
+
+    // AWS SDK v3 includes HTTP metadata on many errors.
+    const httpStatus = anyErr?.$metadata?.httpStatusCode;
+
+    // Different S3-compatible implementations use different codes/names.
+    const name = anyErr?.name;
+    const code = anyErr?.Code ?? anyErr?.code;
+
+    // Treat “not found” as non-fatal “missing object”.
+    if (
+      httpStatus === 404 ||
+      name === "NotFound" ||
+      code === "NotFound" ||
+      code === "NoSuchKey"
+    ) {
+      return false;
+    }
+
+    // Anything else is suspicious: fail loudly.
+    throw err;
+  }
 }

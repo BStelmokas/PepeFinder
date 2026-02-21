@@ -1,27 +1,15 @@
 /**
- * Prompt design goals (taggingPrompt.ts):
+ * Prompt design goals:
  *
- * This prompt defines a *strict contract* between PepeFinder and the vision model.
+ * This prompt defines a strict contract between PepeFinder and the vision model.
+ *
  * It is intentionally long and explicit because:
- *
- * - We require strict, machine-parseable JSON (no prose, no markdown) so the worker
- *   can fail fast and deterministically on malformed output.
- *
- * - We control tag *depth* (target count, categories, confidence calibration)
- *   at the prompt level to balance search recall against hallucination noise
- *   and downstream cost.
- *
- * - We constrain tag style (short phrases, lowercase ASCII, minimal punctuation)
+ * - A strict, machine-parseable JSON is required (no prose, no markdown),
+ *   so the worker can fail fast and deterministically on malformed output.
+ * - Control tag depth (target count, categories, confidence calibration),
+ *   at the prompt level to balance search recall against hallucination noise and downstream cost.
+ * - Constrain tag style (short phrases, lowercase ASCII, minimal punctuation),
  *   to minimize normalization loss and keep search semantics stable.
- *
- * Architectural notes:
- * - This prompt lives in code (not .env) so it is versioned, reviewable, and testable.
- * - Environment variables control *knobs* (model, timeout, caps), not prompt text.
- * - The worker still treats model output as untrusted input:
- *   we normalize, dedupe, clamp confidence, and enforce invariants in code.
- *
- * In short:
- * the model suggests; the system decides.
  */
 
 export const instruction = [
@@ -103,7 +91,7 @@ export const instruction = [
   "- 0.35–0.59: somewhat likely; include only if still reasonably supported.",
   "- Below 0.35: omit the tag.",
 
-  // --- Kinds (lets us post-process/enforce coverage without changing DB) ---
+  // --- Kinds (allows for post-process/enforce coverage without changing DB) ---
   "kind rules:",
   "- Each tag must include a kind from this set only:",
   '  "emotion" | "object" | "action" | "event" | "person" | "color" | "setting" | "style"',
