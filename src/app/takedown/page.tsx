@@ -56,7 +56,7 @@ export default function TakedownPage() {
         </ul>
 
         <h2 className="mt-6 text-sm font-semibold text-gray-900">
-          What happens next
+          What happens then
         </h2>
         <ul className="mt-2 list-disc space-y-2 pl-5 text-sm text-gray-700">
           <li>

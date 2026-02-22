@@ -94,7 +94,6 @@ async function main(): Promise<void> {
   }, 15_000);
 
   // Use id-only cursor to avoid timestamptz precision issues (microseconds vs JS ms).
-  let lastCreatedAt: Date | null = null;
   let lastId: number | null = null;
 
   // DB-side prefix filter (reduces total scanning work).
