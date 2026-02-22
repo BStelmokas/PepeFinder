@@ -76,7 +76,7 @@ async function main(): Promise<void> {
   let kept = 0;
 
   // Count uncertain checks (network/DNS/429/5xx/timeouts).
-  // These must never cause deletion; they just mean "rerun later to converge"
+  // These must never cause deletion; they just mean "rerun later to converge."
   let unknown = 0;
 
   // Store a small sample of skipped rows for inspection.
@@ -93,7 +93,7 @@ async function main(): Promise<void> {
     );
   }, 15_000);
 
-  // Cursor-based pagination is stable and avoids offset performance issues.
+  // Use id-only cursor to avoid timestamptz precision issues (microseconds vs JS ms).
   let lastCreatedAt: Date | null = null;
   let lastId: number | null = null;
 
@@ -106,35 +106,18 @@ async function main(): Promise<void> {
   try {
     while (true) {
       // Build a cursor condition.
-      let cursorCondition: SQL | undefined = undefined;
-
-      if (lastCreatedAt !== null && lastId !== null) {
-        // Important: bind as string, not Date.
-        // The postgres driver setup is failing when binding Date objects.
-        const cursorCreatedAtIso: string = lastCreatedAt.toISOString();
-        const cursorTs = sql.raw(`'${cursorCreatedAtIso}'::timestamptz`);
-
-        cursorCondition = sql`
-        (
-          ${images.createdAt} > ${cursorTs}
-          OR (
-            ${images.createdAt} = ${cursorTs}
-            AND ${images.id} > ${lastId}
-          )
-        )
-        `;
-      }
+      let cursorCondition: SQL =
+        lastId === null ? sql`TRUE` : sql`${images.id} > ${lastId}`;
 
       const rows = await db
         .select({
           id: images.id,
           storageKey: images.storageKey,
-          createdAt: images.createdAt,
         })
         .from(images)
         // Only scan rows with the prefixes we reconcile.
-        .where(sql`${prefixFilterSql} AND (${cursorCondition ?? sql`TRUE`})`)
-        .orderBy(images.createdAt, images.id)
+        .where(sql`${prefixFilterSql} AND (${cursorCondition})`)
+        .orderBy(images.id)
         .limit(batchSize);
 
       if (rows.length === 0) break;
@@ -142,13 +125,6 @@ async function main(): Promise<void> {
       for (const row of rows) {
         scanned++;
 
-        // Protects if Drizzle ever returns a string for createdAt.
-        const rowCreatedAt =
-          row.createdAt instanceof Date
-            ? row.createdAt
-            : new Date(row.createdAt as unknown as string);
-
-        lastCreatedAt = rowCreatedAt;
         lastId = row.id;
 
         const key = deriveObjectKeyFromStorageKey(row.storageKey);
