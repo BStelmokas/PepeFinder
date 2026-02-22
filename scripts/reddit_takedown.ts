@@ -1,8 +1,8 @@
 /**
- * Reddit takedown helper (manual).
+ * Reddit takedown helper.
  *
- * Goal:
- * - Remove an ingested image by reddit post_id (sourceRef).
+ * Design:
+ * - Remove an ingested image by post_id (sourceRef).
  * - Optionally delete the S3 object.
  * - Delete the images row (cascades to image_tags + tag_jobs via FK onDelete: cascade).
  */
@@ -13,15 +13,7 @@ import { images } from "~/server/db/schema";
 import { deleteObject } from "~/server/storage/s3";
 import { sql } from "drizzle-orm";
 
-/**
- * Attempt to derive an S3 object key from storageKey.
- *
- * storageKey might be:
- * - full public URL (S3_PUBLIC_BASE_URL + key)
- * - raw object key (e.g., "images/reddit/<sha>.jpg")
- *
- * If cannot derive, skip object deletion (still delete DB row).
- */
+// Attempt to derive an S3 object key from storageKey.
 function deriveObjectKey(storageKey: string): string | null {
   // If it’s an object key (no scheme, no leading slash), assume it is already the key.
   if (
@@ -42,7 +34,7 @@ function deriveObjectKey(storageKey: string): string | null {
     return storageKey.slice(base.length + 1);
   }
 
-  // "/seed/foo.png" etc: not S3
+  // Not S3
   return null;
 }
 

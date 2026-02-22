@@ -1,10 +1,6 @@
 /**
  * Minimal Reddit API client for manual batch ingestion scripts.
  *
- * This is intentionally not a service:
- * - It’s only used by offline scripts.
- * - Keep it tiny to avoid “crawler infra” creep.
- *
  * Auth model:
  * - Script app OAuth token via /api/v1/access_token
  * - Listing endpoints via oauth.reddit.com
@@ -12,9 +8,7 @@
 
 import { env } from "~/env";
 
-/**
- * Helper to enforce that a value exists at the moment it's needed.
- */
+// Enforce that a value exists.
 function requireEnv(name: string, value: string | undefined): string {
   if (!value) {
     throw new Error(
@@ -24,13 +18,7 @@ function requireEnv(name: string, value: string | undefined): string {
   return value;
 }
 
-/**
- * Get an OAuth access token using the “password” grant.
- *
- * This is acceptable here because:
- * - it’s a single operator-controlled script
- * - not a multi-user product feature
- */
+// Get an OAuth access token using the “password” grant.
 export async function redditGetAccessToken(): Promise<string> {
   const clientId = requireEnv("REDDIT_CLIENT_ID", env.REDDIT_CLIENT_ID);
   const clientSecret = requireEnv(
@@ -75,11 +63,9 @@ export async function redditGetAccessToken(): Promise<string> {
   return token;
 }
 
-/**
- * Minimal subset of listing post fields.
- */
+// Minimal subset of listing post fields.
 export type RedditPost = {
-  id: string; // base36 post id (e.g., "abc123")
+  id: string;
   permalink: string;
   subreddit: string;
   url: string;

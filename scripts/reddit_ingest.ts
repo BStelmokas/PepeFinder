@@ -1,22 +1,10 @@
 /**
- * Reddit ingestion script (manual batch only).
+ * Reddit ingestion script.
  *
- * Goals:
+ * Design:
  * - Fetch a fixed number of posts from ONE subreddit.
  * - Only ingest direct image posts (jpg/png/webp).
  * - Download bytes, compute SHA-256, store to S3 under deterministic key.
- * - Insert images row with minimal attribution:
- *   - source="reddit"
- *   - sourceRef=post_id
- *   - sourceUrl=canonical post URL
- * - Enqueue tag_jobs idempotently (unique(image_id))
- * - Respect cost safety knobs:
- *   - If TAGGING_PAUSED=true -> do NOT enqueue jobs
- *   - If daily cap reached -> enqueue only up to remaining budget
- *
- * Important: this is not crawler infra.
- * - It only runs when executed.
- * - It has a hard limit per run.
  */
 
 import crypto from "node:crypto";
@@ -30,9 +18,7 @@ import {
 } from "./reddit/_reddit_client";
 import { eq, sql } from "drizzle-orm";
 
-/**
- * Tiny helper to make “optional env” become “required at runtime for this script”.
- */
+// Make optional env become required at runtime.
 function requireEnv(name: string, value: string | undefined): string {
   if (!value) {
     throw new Error(
@@ -42,10 +28,7 @@ function requireEnv(name: string, value: string | undefined): string {
   return value;
 }
 
-/**
- * Supported image types for ingestion.
- * Keep it strict to avoid accidental ingestion of videos/gifs/unknown formats.
- */
+// Supported image types for ingestion.
 const ALLOWED_EXT = new Set(["jpg", "jpeg", "png", "webp"]);
 const ALLOWED_CONTENT_TYPES = new Set([
   "image/jpeg",
@@ -78,11 +61,7 @@ function sha256Hex(bytes: Uint8Array): string {
   return crypto.createHash("sha256").update(bytes).digest("hex");
 }
 
-/**
- * Count jobs done today (UTC-ish) to enforce remaining cap for enqueuing.
- * Intentionally reuse the worker’s cap concept, but enforce it *early* here
- * to avoid an unbounded queue buildup.
- */
+// Count jobs done today (UTC-ish) to enforce remaining cap for enqueuing.
 async function countDoneJobsToday(): Promise<number> {
   const res = await db.execute<{ n: number }>(sql`
 		SELECT COUNT(*)::int as n
@@ -94,10 +73,7 @@ async function countDoneJobsToday(): Promise<number> {
   return res[0]?.n ?? 0;
 }
 
-/**
- * Attempt to enqueue a tagging job idempotently.
- * The unique(image_id) constraint ensures no duplicates.
- */
+// Attempt to enqueue a tagging job idempotently.
 async function enqueueJob(imageId: number): Promise<void> {
   await db
     .insert(tagJobs)
@@ -105,13 +81,7 @@ async function enqueueJob(imageId: number): Promise<void> {
     .onConflictDoNothing();
 }
 
-/**
- * Download an image URL into bytes, validating content-type.
- *
- * Safety notes:
- * - Enforce size cap to prevent huge downloads.
- * - Enforce content-type to match supported formats.
- */
+// Download an image URL into bytes, validating content-type.
 async function downloadImageBytes(params: {
   url: string;
   userAgent: string;
@@ -140,7 +110,7 @@ async function downloadImageBytes(params: {
     throw new Error(`Unsupported content-type: ${contentType || "unknown"}`);
   }
 
-  // Hard limit download size (safety).
+  // Hard limit download size.
   const maxBytes = 8 * 1024 * 1024;
 
   const buf = new Uint8Array(await res.arrayBuffer());
@@ -152,24 +122,13 @@ async function downloadImageBytes(params: {
   return { bytes: buf, contentType };
 }
 
-/**
- * Main ingestion logic:
- * - gets token
- * - fetches listing
- * - filters for direct image URLs
- * - ingests up to limit
- */
+// Main
 async function main(): Promise<void> {
   console.log("=== PepeFinder Reddit ingest (manual) ===");
   console.log(
     `subreddit=${env.REDDIT_SUBREDDIT} sort=${env.REDDIT_SORT} limit=${env.REDDIT_LIMIT}`,
   );
 
-  /**
-   * Require REDDIT_USER_AGENT here because:
-   * - it's used for Reddit API calls (handled inside _reddit_client)
-   * - it's also used for downstream image downloads (this script)
-   */
   const userAgent = requireEnv("REDDIT_USER_AGENT", env.REDDIT_USER_AGENT);
 
   const token = await redditGetAccessToken();
@@ -214,7 +173,6 @@ async function main(): Promise<void> {
     }
 
     // Idempotency check #1: (source, post_id) uniqueness.
-    // If the same post was ingested already, skip doing anything.
     const existingByPost = await db
       .select({ id: images.id })
       .from(images)
@@ -236,7 +194,6 @@ async function main(): Promise<void> {
       const sha = sha256Hex(bytes);
 
       // Idempotency check #2: sha256 dedupe.
-      // If bytes already exist, reuse the existing image row and only attach attribution if desired.
       const existingBySha = await db
         .select({ id: images.id, status: images.status })
         .from(images)
@@ -291,7 +248,7 @@ async function main(): Promise<void> {
         `Ingested post_id=${post.id} sha=${sha.slice(0, 8)}… image_id=${imageId} enqueued=${enqueueAllowed && enqueued <= remainingBudget}`,
       );
     } catch (e) {
-      // Fail soft per-post so one bad URL doesn’t break the whole batch.
+      // Fail soft.
       const msg = e instanceof Error ? e.message : String(e);
       console.warn(`Skip post_id=${post.id} url=${post.url} reason=${msg}`);
       skipped++;

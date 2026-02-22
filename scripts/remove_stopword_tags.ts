@@ -1,27 +1,12 @@
 /**
  * One-off backfill: remove stopwords from existing tags.
- *
- * Why this exists:
- * - Sometimes tags may already exist in the DB that may be deemed unwanted
- * - For example stopwords like "a", "an", "the", which add noise.
- * - To clean historical data without breaking referential integrity.
- *
- * Safety properties:
- * - Idempotent: safe to run multiple times.
- * - Conflict-safe: avoid duplicate (image_id, tag_id) rows by inserting with ON CONFLICT.
- *
- * Operational notes:
- * - Better to run this while the worker is stopped (recommended) to avoid races.
- * - This does NOT change images; it only adjusts tags + image_tags.
  */
 
 import { inArray } from "drizzle-orm";
 import { db } from "~/server/db";
 import { imageTags, tags } from "~/server/db/schema";
 
-/**
- * Small, hardcoded stopword list.
- */
+// Hardcoded stopword list.
 const STOPWORDS = ["a", "an", "the"] as const;
 
 async function main(): Promise<void> {

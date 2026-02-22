@@ -4,14 +4,6 @@
  * Why this exists:
  *  - Reddit started gating its API (Pinterest never had one open)
  *  - In response, images were scraped through alternative means (i.e. Apify) and now sit as links inside .json files
- *
- * Design:
- * - One generic ingestion pipeline.
- * - A small per-source configuration layer defines only what differs:
- *   - which JSON field contains the image URL (e.g. "url" vs "imageURL")
- *   - which hostnames are allowed (CDN allowlist)
- *   - which `images.source` marker to store in the database
- *   - which S3 key prefix to use for uploaded objects
  */
 
 import fs from "node:fs/promises";

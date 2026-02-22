@@ -8,12 +8,7 @@
  *   3) If already exists -> return existing image (no duplicate work).
  *   4) If new -> create presigned PUT URL, insert image row as pending.
  *
- * IMPORTANT invariants:
- * - No AI calls on request path.
- * - Minimal new deps (AWS SDK only).
- * - Uses DB uniqueness to guarantee idempotency and dedupe.
- *
- * Why client computes SHA-256 (two-step flow)?
+ * Why does client compute SHA-256 (two-step flow)?
  * - tRPC is JSON-based; uploading multi-MB binary through it is awkward and expensive.
  * - Vercel serverless has body size/time constraints.
  * - Browser can compute SHA-256 with Web Crypto efficiently.
@@ -27,28 +22,11 @@ import { eq } from "drizzle-orm";
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
 import { db } from "~/server/db";
 
-/**
- * tRPC router: upload (MVP1)
- *
- * Step 11 adds:
- * - upload.enqueueTaggingJob: a server-only mutation that creates a tag_jobs row if missing.
- *
- * Important invariant:
- * - enqueue mutation does NOT call any model.
- * - Worker is the only place where paid model calls will ever happen.
- */
+// tRPC router: upload.
 import { images, tagJobs } from "~/server/db/schema";
 import { createPresignedPutUrl, publicUrlForKey } from "~/server/storage/s3";
 
-/**
- * Allowlist of MIME types for MVP1.
- *
- * Why allowlist?
- * - It’s safer than trying to “block bad types”.
- * - It avoids accepting arbitrary bytes that could be surprising later.
- *
- * Expand this list only intentionally.
- */
+// Allowlist of MIME types for MVP1.
 const ALLOWED_IMAGE_MIME_TYPES = new Set([
   "image/png",
   "image/jpeg",
@@ -56,24 +34,10 @@ const ALLOWED_IMAGE_MIME_TYPES = new Set([
   "image/gif",
 ]);
 
-/**
- * Small size cap for MVP1.
- *
- * Why cap at all?
- * - Prevents accidental huge uploads and runaway storage bills.
- * - Makes worst-case request times predictable.
- *
- * You can raise this later once you have monitoring and budgets.
- */
+// Small size cap.
 const MAX_UPLOAD_BYTES = 8 * 1024 * 1024; // 8 MiB
 
-/**
- * Derive a file extension from a MIME type.
- *
- * Why not trust the original filename?
- * - Filenames are user-controlled and messy.
- * - MIME type is what S3 will store and what browsers interpret.
- */
+// Derive a file extension from a MIME type.
 function extensionFromMime(mime: string): string {
   switch (mime) {
     case "image/png":
@@ -85,7 +49,7 @@ function extensionFromMime(mime: string): string {
     case "image/gif":
       return "gif";
     default:
-      // This should be unreachable because we validate MIME types before calling.
+      // This should be unreachable because MIME types are validated before calling.
       return "bin";
   }
 }
@@ -105,10 +69,6 @@ export const uploadRouter = createTRPCRouter({
    *   { alreadyExists: true, imageId, uploadUrl: null, objectKey: null, publicUrl: null }
    * - If new:
    *   { alreadyExists: false, imageId, uploadUrl, objectKey, publicUrl? }
-   *
-   * Why return imageId even before upload?
-   * - We insert the DB row first (status=pending) so the system has a durable identity.
-   * - Later steps (job queue / worker) can reference this image id.
    */
   createUploadPlan: publicProcedure
     .input(
@@ -174,21 +134,11 @@ export const uploadRouter = createTRPCRouter({
        */
       const objectKey = `images/${sha256}.${ext}`;
 
-      /**
-       * storageKey stored in DB:
-       * - If you have a public base URL, store the full URL so it is immediately renderable.
-       * - Otherwise store the object key; detail pages can create signed GET URLs.
-       */
+      // storageKey stored in DB.
       const publicUrl = publicUrlForKey(objectKey);
       const storageKey = publicUrl ?? objectKey;
 
-      /**
-       * Insert image row as pending.
-       *
-       * Why pending?
-       * - Worker (Step 10/11+) will later generate tags.
-       * - Search procedure filters to status='indexed', so uploads won't show in search until done.
-       */
+      // Insert image row as pending.
       const inserted = await db
         .insert(images)
         .values({
@@ -236,7 +186,7 @@ export const uploadRouter = createTRPCRouter({
       const uploadUrl = await createPresignedPutUrl({
         key: objectKey,
         contentType: input.contentType,
-        expiresInSeconds: 60 * 5, // 5 minutes is a common, safe default for upload URLs.
+        expiresInSeconds: 60 * 5, // 5 minutes
       });
 
       return {
@@ -244,7 +194,7 @@ export const uploadRouter = createTRPCRouter({
         imageId,
         uploadUrl,
         objectKey,
-        publicUrl, // null if bucket is private (fine).
+        publicUrl, // null if bucket is private.
         status: "pending" as const,
       };
     }),
@@ -253,17 +203,6 @@ export const uploadRouter = createTRPCRouter({
    * upload.enqueueTaggingJob (Step 11)
    *
    * Input: { imageId: number }
-   *
-   * Behavior:
-   * - Ensures a tag_jobs row exists (unique(image_id) ensures no duplicates).
-   * - Does NOT call any model.
-   *
-   * Why this is a separate mutation (instead of automatically enqueuing in createUploadPlan)?
-   * - createUploadPlan happens *before* the bytes are uploaded.
-   * - We only want to enqueue once we believe the object exists in S3.
-   * - Separating “plan” from “enqueue” makes failure modes cleaner:
-   *   - if upload fails, no job is created
-   *   - if upload succeeds, enqueue is explicit and idempotent
    */
   enqueueTaggingJob: publicProcedure
     .input(
@@ -272,7 +211,7 @@ export const uploadRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ input }) => {
-      // Ensure the image exists (otherwise we'd create a dangling job).
+      // Ensure the image exists.
       const imageRow = await db
         .select({
           id: images.id,
@@ -287,8 +226,6 @@ export const uploadRouter = createTRPCRouter({
         throw new TRPCError({ code: "NOT_FOUND", message: "Image not found" });
       }
 
-      // If the image is already indexed, there is no reason to enqueue.
-      // This is important: “no user behavior should cause unbounded paid usage”.
       if (image.status === "indexed") {
         return { enqueued: false as const, reason: "already_indexed" as const };
       }

@@ -6,116 +6,50 @@
  *   - it might be a public URL (seed data, public bucket, CDN)
  *   - it might be an S3 object key (private bucket, safer default)
  *   - it might be a local/public path (like "/seed/foo.png") which is only valid for browsers
- *
- * The system has different "consumers" of an image:
- * - browser: needs something renderable by the client (often /seed/... works in dev)
- * - server/model: needs a fully qualified URL that is publicly reachable or pre-signed
- *
- * Architectural principle:
- * - “Storage access policy belongs near storage.”
- * - Consumers (like the worker) should not duplicate S3 or URL policy logic.
- *
- * ------------------------------------------------------------
- *  CHANGE MADE HERE (Step 12 refactor)
- * We moved/centralized the “resolveVisionFetchUrl” logic from the worker into this file,
- * so the worker does not know anything about S3/public/private or localhost constraints.
- * ------------------------------------------------------------
  */
 
-import { createPresignedGetUrl, publicUrlForKey } from "~/server/storage/s3"; // Storage adapter: knows how to build URLs / sign URLs.
+import { createPresignedGetUrl, publicUrlForKey } from "~/server/storage/s3";
 
-/**
- * Enumerates which "consumer" will fetch the image.
- *
- * Why model/server are separate from browser:
- * - Browsers can render relative paths served by Next.js (e.g. "/seed/...")
- * - A server-side consumer (like OpenAI vision) cannot access your localhost
- *   and generally needs a fully-qualified URL.
- */
-export type ImageUrlConsumer =
-  | "browser" // UI rendering (client-side)
-  | "server" // any server-side fetcher (worker, cron jobs, etc.)
-  | "model"; // a special case of server: third-party model fetches (OpenAI vision)
+// Which consumer will fetch the image.
+export type ImageUrlConsumer = "browser" | "server" | "model";
 
-/**
- * Resolve an image storage key into a URL that the specified consumer can fetch.
- *
- * Contract:
- * - If storageKey is already an absolute URL, return it unchanged.
- * - If storageKey is an object key, return either:
- *   - a public URL (if available), OR
- *   - a short-lived signed GET URL (safer default for private buckets)
- * - If storageKey is a local path ("/seed/..."):
- *   - browser: return as-is (valid for UI)
- *   - server/model: throw explicit error (fail fast; prevents silent “it worked locally” bugs)
- *
- * This single function is now the source of truth for URL policy.
- */
+// Resolve an image storage key into a URL that the specified consumer can fetch.
 export async function resolveImageUrl(params: {
-  storageKey: string; // The value stored in images.storage_key
-  consumer: ImageUrlConsumer; // Who needs to fetch it
+  storageKey: string;
+  consumer: ImageUrlConsumer;
 }): Promise<string> {
   const { storageKey, consumer } = params;
 
-  /**
-   * Case 1: Already a fully-qualified URL.
-   *
-   * This is the simplest and safest case:
-   * - seed datasets might store direct URLs
-   * - public buckets or CDNs might store direct URLs
-   * - this works for browser AND model/server
-   */
+  // Case 1: Already a fully-qualified URL.
   if (storageKey.startsWith("http://") || storageKey.startsWith("https://")) {
     return storageKey;
   }
 
-  /**
-   * Case 2: Local/public path (like "/seed/foo.png")
-   *
-   * Browser can render this because Next serves it.
-   * But an external model cannot fetch it (it has no access to localhost).
-   */
+  // Case 2: Local/public path (like "/seed/foo.png").
   if (storageKey.startsWith("/")) {
     if (consumer === "browser") {
-      // Browser consumer is allowed to render relative public paths.
       return storageKey;
     }
 
-    // CHANGE MADE HERE (Step 12 refactor)
-    // Previously this check lived in the worker helper resolveVisionFetchUrl().
-    // Now it's centralized so all server consumers behave consistently.
     throw new Error(
       `storage_key "${storageKey}" is a local path and cannot be fetched by consumer=${consumer}. ` +
         `Uploads must store images in S3 (public URL or signed URL) for worker/model tagging.`,
     );
   }
 
-  /**
-   * Case 3: Otherwise treat as an object key (S3 key).
-   *
-   * We intentionally prefer signed GET URLs for server/model consumers because:
-   * - it keeps the bucket private (aligns with "private corpus" semantics)
-   * - it avoids accidentally making the entire dataset public
-   *
-   * But for browser consumer, if you have a public base URL, returning a public URL
-   * is often the simplest approach (no extra signing step per page load).
-   */
+  // Case 3: Otherwise treat as an object key (S3 key).
 
   /**
-   * We pick TTL based on who is fetching:
+   * Pick TTL based on who is fetching:
    * - model: very short (worker uses immediately)
    * - browser: longer (user may keep the page open; thumbnails shouldn’t expire instantly)
    */
-  const signedTtlSeconds = consumer === "model" ? 60 : 60 * 10; // 1 min for model, 10 min for browser/server UI rendering
+  const signedTtlSeconds = consumer === "model" ? 60 : 60 * 10;
 
-  // If the consumer is a browser, we prefer public URL if configured.
+  // If the consumer is a browser, prefer public URL if configured.
   if (consumer === "browser") {
-    // publicUrlForKey will work only if S3_PUBLIC_BASE_URL is valid and intended for browser use.
-    // If you run a private bucket without a public base URL, you can switch browser
-    // rendering later to use a tRPC endpoint that returns signed GET URLs.
-
-    // publicUrlForKey is *optional* by design.
-    // We must explicitly handle the null case.
+    // publicUrlForKey is optional by design.
+    // The null case must explicitly handled.
     const publicUrl = publicUrlForKey(storageKey);
 
     if (publicUrl) {
@@ -129,37 +63,21 @@ export async function resolveImageUrl(params: {
     });
   }
 
-  /**
-   * For server/model consumers, prefer signed URLs (least privilege).
-   * Keeping it private matches “private corpus” semantics by default.
-   */
-
+  // For server/model consumers, prefer signed URLs (least privilege).
   return await createPresignedGetUrl({
     key: storageKey,
     expiresInSeconds: signedTtlSeconds,
   });
 }
 
-/**
- * Convenience wrappers: resolve a URL that the worker/model can fetch.
- *
- * Why keep these wrappers:
- * - It reduces call-site verbosity in the worker.
- * - It avoids “stringly-typed” consumer literals scattered around.
- */
-
-/**
- * Convenience wrapper for model consumers (OpenAI vision, etc.).
- */
+// Resolve a URL that the worker/model can fetch.
 export async function resolveImageUrlForModel(
   storageKey: string,
 ): Promise<string> {
   return resolveImageUrl({ storageKey, consumer: "model" });
 }
 
-/**
- * Convenience wrapper for browser rendering.
- */
+// Convenience wrapper for browser rendering.
 export async function resolveImageUrlForBrowser(
   storageKey: string,
 ): Promise<string> {

@@ -1,24 +1,6 @@
 /**
- * One-off seed script (idempotent)
+ * One-off seed script.
  *
- * Why this exists:
- * - MVP requires a manually seeded dataset (50–200 images).
- * - This is NOT a product feature:
- *   - no UI
- *   - no uploads
- *   - no API routes
- *
- * Key invariants enforced:
- * - Uses the single Drizzle db singleton from `src/server/db.ts`.
- * - Idempotent re-runs using DB uniqueness:
- *   - images.sha256 is unique
- *   - tags.name is unique
- *   - image_tags has composite PK (image_id, tag_id)
- * - Tag normalization matches frozen query semantics via the pure module.
- *
- * Storage model for MVP:
- * - Copy files into `public/seed/` (served by Next.js dev server as `/seed/<file>`).
- * - Store `storageKey` in DB as `/seed/<file>`.
  *
  * How to run:
  * - Set SEED_DIR to the folder containing:
@@ -36,12 +18,7 @@ import { imageTags, images, tags } from "~/server/db/schema";
 import { normalizeTagName } from "~/lib/text/normalize";
 import { eq } from "drizzle-orm";
 
-/**
- * The manifest shape.
- *
- * Keep the type tiny and explicit:
- * - Only parse what's needed.
- */
+// The manifest shape.
 type SeedManifest = {
   images: Array<{
     file: string;
@@ -49,16 +26,12 @@ type SeedManifest = {
   }>;
 };
 
-/**
- * Compute SHA-256 (hex) for a file buffer.
- */
+// Compute SHA-256 (hex) for a file buffer.
 function sha256Hex(buf: Buffer): string {
   return crypto.createHash("sha256").update(buf).digest("hex");
 }
 
-/**
- * Read and parse seed.json from a directory.
- */
+// Read and parse seed.json from a directory.
 function readManifest(seedDir: string): SeedManifest {
   const manifestPath = path.join(seedDir, "seed.json");
 
@@ -87,9 +60,7 @@ function readManifest(seedDir: string): SeedManifest {
   return parsed as SeedManifest;
 }
 
-/**
- * Ensure `public/seed` exists and return its absolute path.
- */
+// Ensure `public/seed` exists and return its absolute path.
 function ensurePublicSeedDir(projectRoot: string): string {
   const publicSeedDir = path.join(projectRoot, "public", "seed");
 
@@ -100,9 +71,7 @@ function ensurePublicSeedDir(projectRoot: string): string {
   return publicSeedDir;
 }
 
-/**
- * Copy an image into `public/seed/` if missing.
- */
+// Copy an image into `public/seed/` if missing.
 function copyToPublicSeedIfMissing(sourcePath: string, destPath: string): void {
   if (fs.existsSync(destPath)) {
     return;
@@ -111,11 +80,7 @@ function copyToPublicSeedIfMissing(sourcePath: string, destPath: string): void {
   fs.copyFileSync(sourcePath, destPath);
 }
 
-/**
- * Upsert-like helper for images:
- * - Try insert (unique on sha256 + storageKey).
- * - If it already exists, fetch its id.
- */
+// Upsert-like helper for images.
 async function getOrCreateImage(args: {
   storageKey: string;
   sha256: string;
@@ -148,7 +113,6 @@ async function getOrCreateImage(args: {
 
   if (existing.length === 0) {
     // This should be impossible if the uniqueness constraints are working.
-    // Throw loudly because silent corruption is worse than a failed seed run.
     throw new Error(
       `Image insert conflicted but existing row not found (sha256=${args.sha256}).`,
     );
@@ -157,18 +121,12 @@ async function getOrCreateImage(args: {
   return existing[0]!.id;
 }
 
-/**
- * Upsert-like helper for tags:
- * - Normalize tag name using frozen semantics.
- * - Insert if missing.
- * - Fetch id.
- */
+// Upsert-like helper for tags.
 async function getOrCreateTagId(rawTag: string): Promise<number | null> {
   // Normalize exactly once here so seed tags match query token semantics forever.
   const normalized = normalizeTagName(rawTag);
 
-  // If normalization yields null, this tag is invalid under the frozen rules.
-  // Skip it rather than failing the entire seed run.
+  // If normalization yields null, this tag is invalid under the frozen rules..
   if (!normalized) return null;
 
   // Attempt insert (unique on tags.name).
@@ -197,11 +155,9 @@ async function getOrCreateTagId(rawTag: string): Promise<number | null> {
   return existing[0]!.id;
 }
 
-/**
- * Main seed routine.
- */
+// Main
 async function main(): Promise<void> {
-  // Operator-provided directory containing seed.json and images.
+  // Directory containing seed.json and images.
   const seedDir = process.env.SEED_DIR;
 
   if (!seedDir) {
@@ -212,12 +168,10 @@ async function main(): Promise<void> {
     );
   }
 
-  // Resolve seedDir to an absolute path for predictable file I/O.
+  // Resolve seedDir to an absolute path.
   const resolvedSeedDir = path.resolve(seedDir);
 
-  // Project root heuristic:
-  // - This script runs from repo root when invoked via pnpm.
-  // - So process.cwd() is a good approximation of the repo root.
+  // Project root.
   const projectRoot = process.cwd();
 
   // Read and validate the manifest.
@@ -230,7 +184,7 @@ async function main(): Promise<void> {
   console.log(`Copying images into: ${publicSeedDir}`);
   console.log(`Manifest entries: ${manifest.images.length}`);
 
-  // Track counters for a clean operator summary.
+  // Track counters.
   let imagesProcessed = 0;
   let tagLinksCreated = 0;
   let invalidTagsSkipped = 0;
@@ -246,7 +200,7 @@ async function main(): Promise<void> {
       );
     }
 
-    // Read file bytes (needed for SHA-256 and later correctness).
+    // Read file bytes.
     const bytes = fs.readFileSync(sourcePath);
 
     // Compute stable dedupe hash.
@@ -276,13 +230,12 @@ async function main(): Promise<void> {
         continue;
       }
 
-      // Insert join row (idempotent due to composite PK).
+      // Insert join row.
       const inserted = await db
         .insert(imageTags)
         .values({
           imageId,
           tagId,
-          // Later, worker tagging will produce real probabilities:
           confidence: 1,
         })
         .onConflictDoNothing()
@@ -302,8 +255,7 @@ async function main(): Promise<void> {
   console.log(`- invalid tags skipped: ${invalidTagsSkipped}`);
 }
 
-// Run main() with an explicit failure path that sets a non-zero exit code.
-// This is important for operator scripts (CI, deploy hooks, etc.).
+// An explicit failure path.
 main().catch((err) => {
   console.error(`❌ Seed failed`);
   console.error(err);

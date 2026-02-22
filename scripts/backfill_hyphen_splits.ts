@@ -7,17 +7,6 @@
  *   - "film"
  *   - "noir"
  * - Leaves the original hyphenated tag untouched.
- *
- * Why it exists:
- * - You already tagged a large corpus.
- * - We want "film noir" searches to match "film-noir" images deterministically.
- *
- * Safety:
- * - Idempotent: safe to re-run.
- * - Adds only missing join rows; does not delete/rename anything.
- *
- * Ops recommendation:
- * - Stop the worker while running to avoid concurrent writes (optional but cleaner).
  */
 
 import { sql } from "drizzle-orm";
@@ -28,18 +17,7 @@ import { expandHyphenatedToken } from "~/lib/text/normalize";
 async function main(): Promise<void> {
   console.log("=== PepeFinder hyphen-split backfill starting ===");
 
-  /**
-   * We pull (image_id, tag_id, tag_name, confidence).
-   * We only care about rows whose tag name contains a hyphen.
-   */
-  /**
-   * ✅ PROPOSED CHANGE: de-duplicate work up front.
-   *
-   * Why:
-   * - Without DISTINCT/GROUP BY, you may process the same (image_id, tag_name)
-   *   multiple times depending on prior runs / joins.
-   * - GROUP BY also gives us a stable confidence to copy (max is fine).
-   */
+  // Pull (image_id, tag_id, tag_name, confidence).
   const rows = await db.execute<{
     image_id: number;
     tag_name: string;
@@ -54,11 +32,7 @@ async function main(): Promise<void> {
 
   console.log(`Found ${rows.length} hyphenated (image, tag) pairs.`);
 
-  /**
-   * ✅ PROPOSED CHANGE: cache tagName -> tagId so we don't re-query tags for every row.
-   *
-   * This turns thousands of "SELECT tags.id WHERE name=..." into at most one per new tag name.
-   */
+  // Cache tagName -> tagId to not re-query tags for every row.
   const tagIdCache = new Map<string, number>();
 
   let addedJoins = 0;
@@ -67,20 +41,19 @@ async function main(): Promise<void> {
   for (const r of rows) {
     processed++;
 
-    // Progress logging so it never "looks stuck".
+    // Progress logging.
     if (processed % 250 === 0) {
       console.log(
         `progress: processed=${processed}/${rows.length} addedJoins=${addedJoins}`,
       );
     }
 
-    // expandHyphenatedToken returns [original, ...parts]
     const expanded = expandHyphenatedToken(r.tag_name);
 
-    // If for some reason there are no extra parts, nothing to do.
+    // No extra parts => nothing to do.
     if (expanded.length <= 1) continue;
 
-    // We skip expanded[0] because that is the original hyphenated token.
+    // Skip expanded[0] because that is the original hyphenated token.
     const parts = expanded.slice(1);
 
     await db.transaction(async (tx) => {
@@ -89,7 +62,7 @@ async function main(): Promise<void> {
         let partTagId = tagIdCache.get(part);
 
         if (!partTagId) {
-          // Upsert the tag row (idempotent).
+          // Upsert the tag row.
           const insertedTag = await tx
             .insert(tags)
             .values({ name: part })
@@ -115,14 +88,7 @@ async function main(): Promise<void> {
           tagIdCache.set(part, partTagId);
         }
 
-        /**
-         * Insert the join row for this image.
-         *
-         * Confidence policy:
-         * - Copy the same confidence as the hyphenated source tag.
-         * - Confidence is display-only; ranking ignores it.
-         */
-        // 2) Insert join row; count only if we truly inserted.
+        // 2) Insert join row.
         const insertedJoin = await tx
           .insert(imageTags)
           .values({
@@ -133,7 +99,7 @@ async function main(): Promise<void> {
           .onConflictDoNothing()
           .returning({ imageId: imageTags.imageId });
 
-        // PROPOSED CHANGE: count based on join insert result (correct).
+        // Count based on join insert result.
         if (insertedJoin.length > 0) {
           addedJoins++;
         }

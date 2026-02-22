@@ -13,6 +13,7 @@ import {
   GetObjectCommand,
   DeleteObjectCommand,
   HeadObjectCommand,
+  type HeadObjectCommandInput,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
@@ -26,35 +27,21 @@ const s3 = new S3Client({
 
   /**
    * Credentials are always server-side.
-   * Never expose these to the browser.
+   * To be never exposed to the browser.
    */
   credentials: {
     accessKeyId: env.S3_ACCESS_KEY_ID,
     secretAccessKey: env.S3_SECRET_ACCESS_KEY,
   },
 
-  /**
-   * Endpoint is required for R2:
-   */
+  // Endpoint is required for R2:
   endpoint: env.S3_ENDPOINT,
 
-  /**
-   * Cloudflare R2 is S3-compatible, but it commonly requires *path-style* addressing.
-   *
-   * In practice, enabling this avoids a class of “signature does not match”
-   * and bucket-hostname resolution issues you can hit with virtual-hosted style.
-   */
+  // Enabling this avoids a class of “signature does not match” and bucket-hostname resolution issues.
   forcePathStyle: true,
 });
 
-/**
- * Create a presigned PUT URL so the browser can upload directly to S3.
- *
- * Why presigned upload?
- * - Avoids sending large bytes through your Next.js server (cost + latency).
- * - Keeps request path light and predictable.
- * - Works well with Vercel serverless limits.
- */
+// Create a presigned PUT URL so the browser can upload directly to S3.
 export async function createPresignedPutUrl(args: {
   key: string;
   contentType: string;
@@ -69,11 +56,7 @@ export async function createPresignedPutUrl(args: {
   return await getSignedUrl(s3, cmd, { expiresIn: args.expiresInSeconds });
 }
 
-/**
- * Create a presigned GET URL to read an object from a private bucket.
- *
- * We will primarily use this on the image detail page if you do not have a public base URL.
- */
+// Create a presigned GET URL to read an object from a private bucket.
 export async function createPresignedGetUrl(args: {
   key: string;
   expiresInSeconds: number;
@@ -86,13 +69,7 @@ export async function createPresignedGetUrl(args: {
   return await getSignedUrl(s3, cmd, { expiresIn: args.expiresInSeconds });
 }
 
-/**
- * Direct upload for scripts (MVP2 ingestion).
- *
- * Why direct upload here?
- * - scripts run server-side, not in a browser
- * - presigned URLs add complexity and provide no real benefit offline
- */
+// Direct upload for scripts.
 export async function putObject(params: {
   key: string;
   body: Uint8Array;
@@ -111,7 +88,7 @@ export async function putObject(params: {
 /**
  * Direct delete for takedown script.
  *
- * This supports “delete object + DB row” takedowns.
+ * Supports “delete object + DB row” takedowns.
  */
 export async function deleteObject(params: { key: string }): Promise<void> {
   const cmd = new DeleteObjectCommand({
@@ -122,17 +99,7 @@ export async function deleteObject(params: { key: string }): Promise<void> {
   await s3.send(cmd);
 }
 
-/**
- * Convert an object key into a renderable URL.
- *
- * Rules:
- * - If S3_PUBLIC_BASE_URL is set, we return `${base}/${key}` (fast path).
- * - Otherwise, caller should use `createPresignedGetUrl` (private bucket path).
- *
- * Why keep this helper?
- * - It centralizes the “public vs private bucket” decision.
- * - It avoids scattering string concatenation across routers/pages.
- */
+// Convert an object key into a renderable URL.
 export function publicUrlForKey(key: string): string | null {
   if (!env.S3_PUBLIC_BASE_URL) return null;
 
@@ -143,42 +110,20 @@ export function publicUrlForKey(key: string): string | null {
 }
 
 /**
- * -------------------------
  * Error-shape helpers
- * -------------------------
- *
- * The AWS SDK v3 throws different error objects depending on:
- * - the command
- * - the runtime
- * - the S3-compatible provider
- *
- * Strict ESLint rules mean we must NOT access properties on unknown values
- * without narrowing first.
  */
 
-/**
- * Is the value a non-null object?
- *
- * This is the base primitive for safe "unknown" introspection.
- */
+// Is the value a non-null object?
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null;
 }
 
-/**
- * Safe property read from a record.
- *
- * Why it exists:
- * - avoids `as any`
- * - avoids unsafe member access
- */
+// Safe property read from a record.
 function getProp(obj: Record<string, unknown>, key: string): unknown {
   return obj[key];
 }
 
-/**
- * Extract `name` from an unknown error, if present.
- */
+// Extract 'name' from an unknown error, if present.
 function getErrorName(err: unknown): string | undefined {
   if (!isRecord(err)) return undefined;
   const name = getProp(err, "name");
@@ -220,39 +165,36 @@ function getProviderCode(err: unknown): string | undefined {
   return undefined;
 }
 
+// Extract Node/network error `syscall` (e.g. "getaddrinfo") if present.
+function getSyscall(err: unknown): string | undefined {
+  if (!isRecord(err)) return undefined;
+  const syscall = getProp(err, "syscall");
+  return typeof syscall === "string" ? syscall : undefined;
+}
+
 /**
- * RECONCILE CHANGE:
- * Lightweight existence check (no body download).
- *
- * Why this function exists:
- * - I manually deleted objects in Cloudflare R2.
- * - The DB still points at them.
- * - The repair script needs a cheap way to ask: “does this key exist?”
- *
- * Returns:
- * - true if object exists
- * - false if object does not exist (404 / NoSuchKey / NotFound)
- *
- * Throws:
- * - for other errors (auth, networking, endpoint misconfig)
- *   because those mean “we can’t trust our check”.
+ * CHANGE: Extract Node/network error `code` even when it's not provider-specific.
+ * Examples: ENOTFOUND, EAI_AGAIN, ECONNRESET, ETIMEDOUT.
  */
-export async function headObjectExists(params: {
+function getNodeErrorCode(err: unknown): string | undefined {
+  if (!isRecord(err)) return undefined;
+  const code = getProp(err, "code");
+  return typeof code === "string" ? code : undefined;
+}
+
+// Tri-state status for HEAD checks.
+export type HeadObjectStatus = "exists" | "missing" | "unknown";
+
+export async function headObjectStatus(params: {
   key: string;
   requestTimeoutMs?: number;
-}): Promise<boolean> {
+}): Promise<HeadObjectStatus> {
   const timeoutMs = params.requestTimeoutMs ?? 10_000; // 10s default: long enough for R2, short enough to avoid hangs
 
-  // AbortController lets us cancel the HTTP request if it stalls.
+  // AbortController allows to cancel the HTTP request if it stalls.
   const ac = new AbortController();
 
-  // If the timer fires, the request is aborted and we treat that as an error.
-  /**
-   * IMPORTANT:
-   * - We MUST clear this timer in a `finally` block.
-   * - Otherwise we leak timers in long-running processes,
-   *   and ESLint correctly warns that `timer` is unused if we never reference it.
-   */
+  // If the timer fires, the request is aborted and is to be treated as an error.
   const timer: NodeJS.Timeout = setTimeout(() => ac.abort(), timeoutMs);
 
   try {
@@ -263,64 +205,65 @@ export async function headObjectExists(params: {
 
     // If HEAD succeeded, object exists.
     await s3.send(cmd, { abortSignal: ac.signal });
-    return true;
+    return "exists";
   } catch (err: unknown) {
-    /**
-     * Timeout behavior:
-     * If we aborted due to timeout, DO NOT treat that as "missing".
-     *
-     * Why:
-     * - A timeout could be transient network slowness.
-     * - Treating timeouts as missing would cause accidental deletes / data loss.
-     *
-     * So we "fail safe" by treating it as "exists" and logging a warning.
-     */
+    // If aborted due to timeout, do not treat that as "missing".
     const name = getErrorName(err);
     if (name === "AbortError") {
       console.warn(
         `[S3 HEAD TIMEOUT] key=${params.key} timeoutMs=${timeoutMs}`,
       );
-      return true;
+      return "unknown";
     }
 
-    // AWS SDK v3 often includes HTTP status metadata.
+    // For AWS SDK v3 HTTP status metadata.
     const httpStatus = getHttpStatusCode(err);
 
-    // Provider-specific string codes (vary by vendor).
+    // Provider-specific string codes.
     const providerCode = getProviderCode(err);
 
-    // Some providers also use name="NotFound".
-    const errName = name;
+    const nodeCode = getNodeErrorCode(err);
+    const syscall = getSyscall(err);
 
-    /**
-     * Treat “not found” as non-fatal “missing object”.
-     *
-     * This is intentionally conservative:
-     * - 404 is the clearest signal
-     * - some providers use NotFound / NoSuchKey
-     */
+    // Definitive missing cases => safe to delete.
     if (
       httpStatus === 404 ||
-      errName === "NotFound" ||
+      name === "NotFound" ||
       providerCode === "NotFound" ||
       providerCode === "NoSuchKey"
     ) {
-      return false;
+      return "missing";
     }
 
-    /**
-     * Anything else is suspicious: fail loudly:
-     * - auth errors
-     * - endpoint misconfig
-     * - transient network failures
-     *
-     * In those cases, throwing is correct because:
-     * - the caller should stop the repair process
-     * - we don't want to take destructive action on uncertain information
-     */
+    // Transient / uncertain cases => unknown (skip + retry later).
+    if (
+      httpStatus === 429 ||
+      (typeof httpStatus === "number" && httpStatus >= 500) ||
+      nodeCode === "ENOTFOUND" ||
+      nodeCode === "EAI_AGAIN" ||
+      nodeCode === "ECONNRESET" ||
+      nodeCode === "ETIMEDOUT" ||
+      syscall === "getaddrinfo"
+    ) {
+      console.warn(
+        `[S3 HEAD UNKNOWN] key=${params.key} httpStatus=${httpStatus ?? "n/a"} nodeCode=${nodeCode ?? "n/a"} syscall=${syscall ?? "n/a"}`,
+      );
+      return "unknown";
+    }
+
+    // Anything else is suspicious. Fail loudly.
     throw err;
   } finally {
-    // Always clear timer to prevent leaks (and satisfy eslint that it's used).
+    // Clear timer to prevent leaks.
     clearTimeout(timer);
   }
+}
+
+// Lightweight existence check (no body download).
+export async function headObjectExists(params: {
+  key: string;
+  requestTimeoutMs?: number;
+}): Promise<boolean> {
+  const status = await headObjectStatus(params);
+  return status === "exists";
 }

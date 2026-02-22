@@ -1,21 +1,12 @@
 /**
  * Requeue failed tagging jobs.
  *
- * What this does:
+ * Design:
  * - Finds tag_jobs where status = 'failed'
  * - Resets:
  *     tag_jobs.status  -> 'queued'
  *     tag_jobs.last_error -> null
  *     images.status -> 'pending'
- *
- * Why:
- * - Lets operator retry transient failures
- * - Does NOT create duplicate jobs
- * - Safe to run multiple times
- *
- * Important:
- * - Respects daily caps and kill switch automatically (worker enforces them)
- * - Does not bypass cost controls
  */
 
 import { sql } from "drizzle-orm";

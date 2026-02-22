@@ -1,25 +1,6 @@
 /**
- * Operator-only moderation script:
+ * Moderation script:
  * - Unlist or delete images that exceed a specified flag_count threshold.
- *
- * Why a script (not a product feature):
- * - Moderation is an operational workflow.
- * - Keeping it in scripts/ preserves MVP simplicity and avoids adding UI/admin routes.
- *
- * Safety invariants:
- * - The flag threshold MUST be >= 1 to prevent "oops, delete everything".
- * - Default mode is "unlist" (safer).
- * - Supports --dry-run to preview exactly what would happen.
- *
- * What “unlist” means in PepeFinder:
- * - Set images.status = "failed"
- * - Search path only shows status="indexed"
- * - So the image disappears from search results, but remains reachable by /image/[id]
- *
- * What “delete” means:
- * - Delete DB rows for images + cascading joins/jobs.
- * - Best-effort delete of the underlying object from S3/R2 *only if*
- *   storageKey is an object key (not an http URL).
  *
  * Usage:
  *   pnpm flags:moderate -- --mode=unlist --min=5 --dry-run
@@ -83,13 +64,7 @@ function parseArgs(argv: string[]) {
   return out;
 }
 
-/**
- * Determine whether storageKey looks like an S3 object key that can be deleted.
- *
- * - "images/foo.jpg" are treated as deletable
- * and:
- * - "https://..." as NOT deletable via S3 deleteObject (because it's not a key)
- */
+// Determine whether storageKey looks like an S3 object key that can be deleted.
 function isObjectKey(storageKey: string): boolean {
   return (
     !storageKey.startsWith("http://") && !storageKey.startsWith("https://")
@@ -104,9 +79,7 @@ async function main(): Promise<void> {
   console.log(`min_flag_count=${min}`);
   console.log(`dry_run=${dryRun}`);
 
-  /**
-   * Fetch candidate images.
-   */
+  // Fetch candidate images.
   const candidates = await db
     .select({
       id: images.id,
@@ -126,9 +99,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  /**
-   * Print a preview table (operator-friendly).
-   */
+  // Print a preview table (operator-friendly).
   for (const c of candidates.slice(0, 25)) {
     const name = c.caption?.trim() ? c.caption.trim() : `#${c.id}`;
     console.log(
@@ -199,12 +170,10 @@ async function main(): Promise<void> {
   throw new Error(`Unknown mode: ${_never}`);
 }
 
-/**
- * Helper: build a safe "id IN (...)" clause without pulling in extra deps.
- */
+// Safe "id IN (...)" clause.
 function inArrayIds(ids: number[]) {
   if (ids.length === 0) {
-    // This should never happen in usage, but keep it safe.
+    // Defensive; should never happen in usage.
     return sql`FALSE`;
   }
 
