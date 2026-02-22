@@ -122,7 +122,9 @@ async function downloadImageBytes(params: {
   return { bytes: buf, contentType };
 }
 
-// Main
+/**
+ * Main.
+ */
 async function main(): Promise<void> {
   console.log("=== PepeFinder Reddit ingest (manual) ===");
   console.log(

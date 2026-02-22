@@ -4,7 +4,7 @@
  * This is a machine-readable list of URLs *desirable for search engines to discover*.
  *
  * Architectural choice:
- * - Generate the sitemap from Postgres so it stays accurate as your corpus grows.
+ * - Generate the sitemap from Postgres so it stays accurate as the corpus grows.
  * - Include only "indexed" images so crawlers don't waste time on pending/failed items.
  */
 

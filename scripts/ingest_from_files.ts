@@ -178,7 +178,7 @@ async function readUrlsFromFolder(
 }
 
 /**
- * MAIN
+ * Main.
  *
  * CLI:
  *   pnpm ingest:files <source> <folder> [maxPerRun]

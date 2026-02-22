@@ -155,7 +155,9 @@ async function getOrCreateTagId(rawTag: string): Promise<number | null> {
   return existing[0]!.id;
 }
 
-// Main
+/**
+ * Main.
+ */
 async function main(): Promise<void> {
   // Directory containing seed.json and images.
   const seedDir = process.env.SEED_DIR;
