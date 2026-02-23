@@ -8,7 +8,7 @@ It is intentionally simple, intentionally bounded, and intentionally determinist
 
 # Try It in 60 Seconds
 
-1. Visit the homepage.
+1. Visit the homepage (`https://pepefinder.vercel.app/`)
 2. Search: `sad pepe`
 3. Search: `film noir`
 4. Click any image → see caption + scrollable tags.
