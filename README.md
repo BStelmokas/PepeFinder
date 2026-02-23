@@ -9,7 +9,7 @@ It is intentionally simple, intentionally bounded, and intentionally determinist
 # Try It in 60 Seconds
 
 1. Visit the homepage [website](https://pepefinder.vercel.app/)
-2. Search: `cowboy hat horse lasso`
+2. Search: `cowboy hat horse lasso blue sky`
 3. Click any image → see caption + scrollable tags.
 4. Download the image (attachment forced).
 5. Flag it → watch the Flag toggle.
