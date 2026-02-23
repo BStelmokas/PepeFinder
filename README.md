@@ -8,13 +8,12 @@ It is intentionally simple, intentionally bounded, and intentionally determinist
 
 # Try It in 60 Seconds
 
-1. Visit the homepage (`https://pepefinder.vercel.app/`)
-2. Search: `sad pepe`
-3. Search: `film noir`
-4. Click any image → see caption + scrollable tags.
-5. Download the image (attachment forced).
-6. Flag it → watch the counter update.
-7. Upload a new image → see image page with `pending → indexed` transition.
+1. Visit the homepage [website](https://pepefinder.vercel.app/)
+2. Search: `cowboy hat horse lasso`
+3. Click any image → see caption + scrollable tags.
+4. Download the image (attachment forced).
+5. Flag it → watch the Flag toggle.
+6. Upload a new image → see image page with `pending → indexed` transition.
 
 Search works regardless if the AI worker is running or paused.
 
