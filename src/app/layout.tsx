@@ -6,6 +6,8 @@ import { Geist } from "next/font/google";
 import { env } from "~/env";
 import { TRPCReactProvider } from "~/trpc/react";
 
+import { Analytics } from "@vercel/analytics/next"; // Vercel's Next.js-aware Analytics component.
+
 /**
  * A canonical base URL:
  * - OpenGraph metadata (Discord/Twitter previews) works best with absolute URLs.
@@ -134,6 +136,7 @@ export default function RootLayout({
             </footer>
           </div>
         </TRPCReactProvider>
+        <Analytics />
       </body>
     </html>
   );
