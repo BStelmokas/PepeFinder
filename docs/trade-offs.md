@@ -357,8 +357,62 @@ Cleaned up:
 - Favicon/icons
 - Robots + sitemap hygiene
 
-Low effort.
-High trust signal.
+---
+
+## 2.9 Page-level canonical + indexing policy
+
+- `/image/[id]` → canonical, indexable
+- `/search?q=...` → `noindex`, `follow`
+- Absolute URLs via `SITE_URL`
+
+Search pages stay out of the index.
+Authority concentrates on image pages.
+
+Correctness > accidental discoverability.
+
+---
+
+## 2.10 Per-image OpenGraph overrides
+
+- Global `/og.png` fallback
+- Per-image OG only if URL is public + absolute
+
+Prevents broken previews.
+No dynamic OG generation (yet).
+
+Simple, predictable.
+
+---
+
+## 2.11 JSON-LD structured data
+
+Each `/image/[id]` emits:
+
+- `@type: ImageObject`
+- name
+- contentUrl
+- description
+- keywords
+
+Improves image discoverability.
+
+Low complexity, high leverage.
+
+---
+
+## 2.12 Metadata fetched in `generateMetadata()`
+
+Metadata loads image data separately from page render.
+
+Trade-off:
+
+- Duplicate DB read per request.
+
+Accepted for:
+
+- Correct canonical URLs
+- Accurate OG data
+- Clean indexing behavior
 
 ---
 

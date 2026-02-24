@@ -15,6 +15,9 @@ import { createTRPCContext } from "~/server/api/trpc";
 import { ImageActions } from "./_components/image-actions";
 import { ImageDetailLayout } from "./_components/image-detail-layout";
 
+import type { Metadata } from "next";
+import { env } from "~/env";
+
 /**
  * Next.js App Router "params" boundary helper.
  *
@@ -31,6 +34,113 @@ import { ImageDetailLayout } from "./_components/image-detail-layout";
  */
 type ParamsShape = { id: string };
 type PropsShape = { params: ParamsShape | Promise<ParamsShape> };
+
+/**
+ * SEO:
+ * generateMetadata runs on the server before rendering.
+ */
+export async function generateMetadata(props: unknown): Promise<Metadata> {
+  const { params } = props as PropsShape;
+
+  const resolvedParams = await params;
+
+  // Parse and validate id (avoid accidental crashes in metadata generation).
+  const id = Number(resolvedParams.id);
+
+  // If invalid, noindex this page and provide a stable canonical anyway.
+  if (!Number.isInteger(id) || id <= 0) {
+    const canonical = new URL(
+      `/image/${encodeURIComponent(resolvedParams.id)}`,
+      env.SITE_URL,
+    );
+
+    return {
+      title: "Invalid image id",
+      description: "The image id in the URL is invalid.",
+      alternates: { canonical },
+      robots: { index: false, follow: true },
+    };
+  }
+
+  // Create server-side tRPC caller and fetch data for metadata.
+  const ctx = await createTRPCContext({ headers: await headers() });
+  const api = createCaller(ctx);
+
+  let data: Awaited<ReturnType<typeof api.image.getById>> | null = null;
+
+  try {
+    data = await api.image.getById({ id });
+  } catch {
+    data = null;
+  }
+
+  const canonical = new URL(`/image/${id}`, env.SITE_URL);
+
+  // If image doesn't exist, noindex it.
+  if (!data) {
+    return {
+      title: "Image not found",
+      description: `There is no image with id #${id}.`,
+      alternates: { canonical },
+      robots: { index: false, follow: true },
+    };
+  }
+
+  const { image, tags } = data;
+
+  // Build a stable, human-readable title.
+  const topTags = tags
+    .slice(0, 5)
+    .map((t) => t.name)
+    .filter(Boolean);
+
+  const titleBase = image.caption?.trim()
+    ? image.caption.trim()
+    : topTags.length > 0
+      ? topTags.slice(0, 3).join(", ")
+      : `Image #${image.id}`;
+
+  // Description is a short snippet for search results and social previews.
+  const description =
+    topTags.length > 0
+      ? `Pepe meme image tagged: ${topTags.join(", ")}.`
+      : "Pepe meme image with AI-generated tags.";
+
+  // Only use an OG image URL if it is public and absolute.
+  const candidateOg = image.renderUrl ?? image.storageKey;
+
+  const ogImageUrl =
+    typeof candidateOg === "string" &&
+    (candidateOg.startsWith("https://") || candidateOg.startsWith("http://"))
+      ? candidateOg
+      : null;
+
+  return {
+    title: titleBase,
+    description,
+    alternates: { canonical },
+
+    openGraph: {
+      title: `${titleBase} | PepeFinder`,
+      description,
+      url: canonical,
+      type: "article",
+      images: ogImageUrl ? [{ url: ogImageUrl }] : undefined,
+    },
+
+    twitter: {
+      card: "summary_large_image",
+      title: `${titleBase} | PepeFinder`,
+      description,
+      images: ogImageUrl ? [ogImageUrl] : undefined,
+    },
+
+    robots: {
+      index: true,
+      follow: true,
+    },
+  };
+}
 
 export default async function ImageDetailPage(props: unknown) {
   const { params } = props as PropsShape;
@@ -113,20 +223,51 @@ export default async function ImageDetailPage(props: unknown) {
     ? image.caption.trim()
     : `Image #${image.id}`;
 
+  /*
+   * SEO
+   *
+   * JSON-LD structured data for ImageObject.
+   */
+  const canonical = new URL(`/image/${image.id}`, env.SITE_URL).toString();
+
+  const imageUrl = image.renderUrl ?? image.storageKey;
+
+  const keywords = tags.map((t) => t.name).filter(Boolean);
+
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "ImageObject",
+    name: title,
+    url: canonical,
+    contentUrl: imageUrl,
+    description:
+      keywords.length > 0
+        ? `Tags: ${keywords.slice(0, 12).join(", ")}.`
+        : "Pepe meme image with AI-generated tags.",
+    keywords: keywords.join(", "),
+  };
+
   // Delegate the full rendering (image + tags layout) to a client component (Server Components cannot measure runtime layout).
   return (
-    <ImageDetailLayout
-      imageStatus={image.status}
-      imageId={image.id}
-      title={title}
-      createdAtIso={image.createdAt.toISOString()}
-      imageUrl={image.renderUrl ?? image.storageKey}
-      ImageActionsSlot={<ImageActions imageId={image.id} />}
-      tags={tags.map((t) => ({
-        id: t.id,
-        name: t.name,
-        confidence: t.confidence,
-      }))}
-    />
+    <>
+      {/* SEO: JSON-LD structured data. */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
+      <ImageDetailLayout
+        imageStatus={image.status}
+        imageId={image.id}
+        title={title}
+        createdAtIso={image.createdAt.toISOString()}
+        imageUrl={imageUrl}
+        ImageActionsSlot={<ImageActions imageId={image.id} />}
+        tags={tags.map((t) => ({
+          id: t.id,
+          name: t.name,
+          confidence: t.confidence,
+        }))}
+      />
+    </>
   );
 }

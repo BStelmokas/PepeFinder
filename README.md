@@ -223,6 +223,32 @@ Deploys deterministic.
 
 ---
 
+# SEO & Discoverability
+
+PepeFinder uses intentional indexing rules:
+
+- Image pages → canonical + indexable
+- Search pages → `noindex`
+- Absolute URLs enforced
+
+## Structured Data
+
+Each image page emits:
+
+- `ImageObject` JSON-LD
+- Caption / tags as keywords
+- Direct content URL
+
+Improves Google Images eligibility.
+
+## OpenGraph Strategy
+
+- Global `/og.png`
+- Per-image override when possible
+- `summary_large_image` Twitter card
+
+---
+
 # Local Development
 
 Install:
@@ -291,7 +317,7 @@ Search remains unaffected.
 
 # Why This Project Exists
 
-PepeFinder demonstrates:
+This app demonstrates:
 
 ```
 AI integration without request-path coupling

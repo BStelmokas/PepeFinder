@@ -18,6 +18,8 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { createCaller } from "~/server/api/root";
 import { createTRPCContext } from "~/server/api/trpc";
+import type { Metadata } from "next";
+import { env } from "~/env";
 
 /**
  * The shape Next provides for the resolved search params object.
@@ -110,6 +112,49 @@ function parseIntParam(
   return Number.isFinite(n) && n >= 0 ? n : fallback;
 }
 
+/**
+ * SEO:
+ * Dynamic metadata because the content depends on ?q=
+ *
+ */
+export async function generateMetadata(props: {
+  searchParams?: Promise<ResolvedSearchParams>;
+}): Promise<Metadata> {
+  const sp: ResolvedSearchParams = (await props.searchParams) ?? {};
+
+  const rawQ = sp.q;
+  const q = Array.isArray(rawQ) ? rawQ.join(" ") : (rawQ ?? "");
+
+  const qTrimmed = q.trim();
+
+  // Collapse multiple spaces into a single space for display purposes.
+  const qDisplay = qTrimmed.replace(/\s+/g, " ");
+
+  // Build a clean canonical that only includes q (not cursor/shown).
+  const canonical =
+    qDisplay === ""
+      ? new URL("/search", env.SITE_URL)
+      : new URL(`/search?q=${encodeURIComponent(qDisplay)}`, env.SITE_URL);
+
+  const title = qDisplay === "" ? "Search" : `Search “${qDisplay}”`;
+  const description =
+    qDisplay === ""
+      ? "Search Pepe images by tags."
+      : `Search results for “${qDisplay}” on PepeFinder.`;
+
+  return {
+    title,
+    description,
+    alternates: {
+      canonical,
+    },
+    robots: {
+      index: false, // internal search results should not be indexed
+      follow: true, // but crawlers can follow links to /image/[id]
+    },
+  };
+}
+
 export default async function SearchPage(props: {
   searchParams?: Promise<ResolvedSearchParams>;
 }) {
@@ -128,6 +173,9 @@ export default async function SearchPage(props: {
    */
   const rawQ = searchParams.q;
   const q = Array.isArray(rawQ) ? rawQ.join(" ") : (rawQ ?? "");
+
+  // Normalize q for URLs.
+  const qUrl = q.trim().replace(/\s+/g, " ");
 
   // Read "cursor" from URL, decode it into the typed cursor shape expected by tRPC (Date included).
   const rawCursor = searchParams.cursor;
@@ -153,7 +201,7 @@ export default async function SearchPage(props: {
    * - matchCount
    */
   const results: SearchImagesOutput = await api.search.searchImages({
-    q,
+    q: qUrl,
     limit: pageSize,
     cursor,
   });
@@ -179,7 +227,7 @@ export default async function SearchPage(props: {
             <p className="text-sm text-gray-600">
               Query:{" "}
               <span className="font-medium wrap-break-word text-gray-900">
-                {q.trim() === "" ? "(empty)" : q}
+                {qUrl === "" ? "(empty)" : qUrl}
               </span>
             </p>
           </div>
@@ -242,7 +290,7 @@ export default async function SearchPage(props: {
           {nextCursorToken ? (
             <Link
               className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-900 shadow-sm hover:bg-gray-50"
-              href={`/search?q=${encodeURIComponent(q)}&cursor=${encodeURIComponent(nextCursorToken)}&shown=${encodeURIComponent(shownSoFar)}`}
+              href={`/search?q=${encodeURIComponent(qUrl)}&cursor=${encodeURIComponent(nextCursorToken)}&shown=${encodeURIComponent(shownSoFar)}`}
             >
               Next →
             </Link>

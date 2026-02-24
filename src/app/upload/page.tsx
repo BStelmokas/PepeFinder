@@ -26,6 +26,19 @@
 import Link from "next/link";
 import { UploadForm } from "./_components/upload-form";
 
+import type { Metadata } from "next";
+import { env } from "~/env";
+
+export const metadata: Metadata = {
+  title: "Upload",
+  description: "Upload a meme image to be tagged for search.",
+  alternates: { canonical: new URL("/upload", env.SITE_URL) },
+  robots: {
+    index: false,
+    follow: true,
+  },
+};
+
 export default function UploadPage() {
   return (
     <main className="min-h-screen bg-white">

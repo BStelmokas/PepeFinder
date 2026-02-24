@@ -15,7 +15,7 @@ import { Analytics } from "@vercel/analytics/next"; // Vercel's Next.js-aware An
  * - In prod, this is the real domain.
  * - In local dev, it can be http://localhost:3000.
  */
-const METADATA_BASE = new URL(env.APP_URL);
+const METADATA_BASE = new URL(env.SITE_URL);
 
 export const metadata: Metadata = {
   //  metadataBase tells Next.js how to turn relative URLs into absolute URLs.

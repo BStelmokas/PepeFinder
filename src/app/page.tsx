@@ -12,6 +12,19 @@
  *   - the navigation is handled by the browser / Next.js naturally
  */
 
+import type { Metadata } from "next";
+import { env } from "~/env";
+
+// Static metadata for SEO
+export const metadata: Metadata = {
+  title: "PepeFinder",
+  description:
+    "Search thousands of Pepe memes using deterministic tag-overlap ranking. Upload images and get AI-generated tags.",
+  alternates: {
+    canonical: new URL("/", env.SITE_URL),
+  },
+};
+
 export default function HomePage() {
   return (
     <main className="min-h-screen bg-white">
