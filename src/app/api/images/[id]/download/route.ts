@@ -20,6 +20,54 @@ import { db } from "~/server/db";
 import { images } from "~/server/db/schema";
 import { eq } from "drizzle-orm";
 import { resolveImageUrlForBrowser } from "~/server/storage/resolve-image-url";
+import { env } from "~/env";
+
+/**
+ * Allowlist where this route is permitted to fetch from.
+ *
+ * Only allow server-side fetches from trusted storage hosts.
+ * Prevents this endpoint from becoming an open proxy (SSRF risk) if storageKey is ever compromised.
+ */
+function isAllowedUpstreamUrl(fetchUrl: string): boolean {
+  try {
+    const u = new URL(fetchUrl);
+
+    // Always require http(s) to avoid weird schemes.
+    if (u.protocol !== "http:" && u.protocol !== "https:") return false;
+
+    // Best case: configured public base URL for the bucket.
+    if (env.S3_PUBLIC_BASE_URL) {
+      const base = new URL(env.S3_PUBLIC_BASE_URL);
+      if (u.host === base.host && u.protocol === base.protocol) {
+        return true;
+      }
+    }
+
+    // If no public base URL, still allow the S3 endpoint host.
+    if (env.S3_ENDPOINT) {
+      const endpoint = new URL(env.S3_ENDPOINT);
+      if (u.host === endpoint.host) {
+        return true;
+      }
+    }
+
+    // Legacy allowlist.
+    const legacyAllowedHosts = new Set([
+      "i.redd.it",
+      "preview.redd.it",
+      "i.imgur.com",
+      "i.pinimg.com",
+    ]);
+
+    if (legacyAllowedHosts.has(u.host)) {
+      return true;
+    }
+
+    return false;
+  } catch {
+    return false;
+  }
+}
 
 export async function GET(
   _req: Request,
@@ -60,8 +108,15 @@ export async function GET(
     // Resolve to a URL that can be fetched from the server.
     const fetchUrl = await resolveImageUrlForBrowser(row.storageKey);
 
-    // Fetch bytes server-side.
-    // For large files, streaming is better, but Pepe images are small so buffering keeps code simple.
+    // Enforce allowlist before fetching (SSRF hardening).
+    if (!isAllowedUpstreamUrl(fetchUrl)) {
+      return NextResponse.json(
+        { ok: false, error: "Blocked upstream host" },
+        { status: 400 },
+      );
+    }
+
+    // Fetch from upstream.
     const upstream = await fetch(fetchUrl);
 
     if (!upstream.ok) {
@@ -78,8 +133,6 @@ export async function GET(
       upstream.headers.get("content-type")?.split(";")[0]?.trim() ??
       "application/octet-stream";
 
-    const bytes = await upstream.arrayBuffer();
-
     // Build a friendly filename.
     // Sanitize heavily because captions can contain punctuation and non-filename characters.
     const baseName = row.caption?.trim()
@@ -94,8 +147,8 @@ export async function GET(
     // The extension isn't always known, but browsers use content-type anyway.
     const filename = `${safeName || `pepe-${imageId}`}.jpg`;
 
-    // Return with attachment header to force download.
-    return new NextResponse(bytes, {
+    // Stream the response body, return with attachment header to force download.
+    return new NextResponse(upstream.body, {
       status: 200,
       headers: {
         "Content-Type": contentType,
