@@ -55,7 +55,13 @@ describe("normalizeQueryString", () => {
 describe("stopwords helpers", () => {
   it("DEFAULT_STOPWORDS contains the tiny conservative set", () => {
     // Makes stopword list changes explicit (no silent semantics changes).
-    expect(Array.from(DEFAULT_STOPWORDS)).toEqual(["a", "an", "the"]);
+    expect(Array.from(DEFAULT_STOPWORDS)).toEqual([
+      "a",
+      "an",
+      "the",
+      "s",
+      "re",
+    ]);
   });
 
   it("removeStopwordsFromTokens removes only whole-token stopwords", () => {

@@ -97,7 +97,7 @@ Two invariants are enforced across ingestion:
 ### Stopword filtering
 
 Removes:
-`a`, `an`, `the`
+`a`, `an`, `the`, `s`, `re`
 
 Applies to:
 

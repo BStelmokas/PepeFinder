@@ -17,7 +17,7 @@
  * - stopwords removed
  */
 
-export const DEFAULT_STOPWORDS = new Set(["a", "an", "the"]);
+export const DEFAULT_STOPWORDS = new Set(["a", "an", "the", "s", "re"]);
 
 // Normalize a string’s whitespace.
 export function normalizeWhitespace(input: string): string {

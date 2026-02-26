@@ -7,7 +7,7 @@ import { db } from "~/server/db";
 import { imageTags, tags } from "~/server/db/schema";
 
 // Hardcoded stopword list.
-const STOPWORDS = ["a", "an", "the"] as const;
+const STOPWORDS = ["s", "re"] as const;
 
 async function main(): Promise<void> {
   console.log("=== Remove stopword tags (single-token) ===");

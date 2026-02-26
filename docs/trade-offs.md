@@ -90,7 +90,7 @@ All tag normalization and tokenization live in a pure TypeScript module.
 
 **Extensions added pre-production**
 
-- Stopword removal at token boundaries (`a`, `an`, `the`, `and`)
+- Stopword removal at token boundaries (`a`, `an`, `the`, `s`, `re`)
 - Hyphen expansion invariant (`film-noir` → `film` + `noir`)
 - Idempotent backfill scripts for historical data
 
