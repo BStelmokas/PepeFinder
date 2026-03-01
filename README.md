@@ -215,8 +215,13 @@ CLI-based:
 
 Schema changes use:
 
+```bash
 pnpm db:generate
+```
+
+```bash
 pnpm db:migrate
+```
 
 Migrations committed to Git.
 Deploys deterministic.
