@@ -19,7 +19,7 @@ import { env } from "~/env";
 export const metadata: Metadata = {
   title: "PepeFinder",
   description:
-    "Search thousands of Pepe memes using deterministic tag-overlap ranking. Upload images and get AI-generated tags.",
+    "Search thousands of Pepe images by describing the actual visual components of the picture.",
   alternates: {
     canonical: new URL("/", env.SITE_URL),
   },
