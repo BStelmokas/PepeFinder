@@ -127,19 +127,23 @@ export function ImageDetailLayout(props: {
               <p className="mr-1 text-xs text-gray-500">{createdAtLabel}</p>
             </div>
 
-            <div className="relative mt-4 overflow-hidden rounded-2xl border border-gray-200">
-              {props.ImageActionsSlot}
+            {/* SEO: wrap the image area in <figure> so the caption is semantically associated with the image. */}
+            <figure className="mt-4">
+              <div className="relative overflow-hidden rounded-2xl border border-gray-200">
+                {props.ImageActionsSlot}
 
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={props.imageUrl}
-                alt={props.title}
-                className="h-auto w-full object-contain"
-                // When the image finishes loading, its final height may differ.
-                // Sync again immediately to avoid “tags card mismatch”.
-                onLoad={() => syncTagsHeightToImage()}
-              />
-            </div>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={props.imageUrl}
+                  alt={props.title}
+                  className="h-auto w-full object-contain"
+                  // When the image finishes loading, its final height may differ.
+                  // Sync again immediately to avoid “tags card mismatch”.
+                  onLoad={() => syncTagsHeightToImage()}
+                />
+              </div>
+              <figcaption className="sr-only">{props.title}</figcaption>
+            </figure>
           </div>
 
           {/* Tags card (always height-matched to image card) */}
