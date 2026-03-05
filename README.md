@@ -8,8 +8,8 @@ It focuses on **deterministic search, controlled AI integration, and operational
 **Code:** https://github.com/BStelmokas/PepeFinder
 
 <p align="center">
-  <img src="docs/screenshot_1.png" width="48%" style="margin-right: 1%" />
-  <img src="docs/screenshot_2.png" width="48%" />
+  <img src="docs/screenshot_1.png" width="49%" style="margin-right: 1%" />
+  <img src="docs/screenshot_2.png" width="49%" />
 </p>
 
 ## Stack
