@@ -133,7 +133,7 @@ export function ImageDetailLayout(props: {
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={props.imageUrl}
-                alt={`Pepe image ${props.imageId}`}
+                alt={props.title}
                 className="h-auto w-full object-contain"
                 // When the image finishes loading, its final height may differ.
                 // Sync again immediately to avoid “tags card mismatch”.
