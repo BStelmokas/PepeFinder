@@ -1,8 +1,30 @@
 # PepeFinder
 
-PepeFinder is an AI-tagged **Pepe meme search engine** built as a small, production-minded system.
+PepeFinder is an AI-tagged **Pepe meme search engine** designed as a small, production-minded system.
 
-It is intentionally simple, intentionally bounded, and intentionally deterministic.
+It focuses on **deterministic search, controlled AI integration, and operational safety** rather than feature complexity.
+
+**Live:** https://pepefinder.com
+**Code:** https://github.com/BStelmokas/PepeFinder
+
+![PepeFinder screenshot](docs/screenshot_1.png)
+![PepeFinder screenshot](docs/screenshot_2.png)
+
+## Stack
+
+- Next.js (App Router)
+- TypeScript
+- tRPC
+- PostgreSQL
+- Drizzle ORM
+- Background worker (Node.js)
+- Tailwind CSS
+
+---
+
+## Architecture overview
+
+The system keeps the request path DB-only, with all AI tagging performed asynchronously by a background worker backed by a Postgres job queue.
 
 ---
 
