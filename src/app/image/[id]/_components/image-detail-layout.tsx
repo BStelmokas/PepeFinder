@@ -34,6 +34,7 @@ export function ImageDetailLayout(props: {
   tags: TagRow[];
   ImageActionsSlot: React.ReactNode;
   backHref: string;
+  preferBrowserBack: boolean;
 }) {
   const imageCardRef = useRef<HTMLDivElement | null>(null);
 
@@ -61,6 +62,11 @@ export function ImageDetailLayout(props: {
 
   // "Results" uses the explicit prop passed by page.tsx.
   function onBackToResults(): void {
+    if (props.preferBrowserBack && window.history.length > 1) {
+      router.back();
+      return;
+    }
+
     router.push(props.backHref);
   }
 

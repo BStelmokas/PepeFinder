@@ -287,6 +287,7 @@ export default async function ImageDetailPage(props: unknown) {
         createdAtIso={image.createdAt.toISOString()}
         imageUrl={imageUrl}
         backHref={backHref}
+        preferBrowserBack={backHref.startsWith("/search")}
         ImageActionsSlot={<ImageActions imageId={image.id} />}
         tags={tags.map((t) => ({
           id: t.id,
