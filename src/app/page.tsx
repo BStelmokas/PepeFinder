@@ -19,7 +19,7 @@ import { env } from "~/env";
 export const metadata: Metadata = {
   title: "PepeFinder",
   description:
-    "Search thousands of images of Pepe the Frog by describing the actual visual details you are looking for.",
+    "Search thousands of images of Pepe the Frog by describing the visuals themselves.",
   alternates: {
     canonical: new URL("/", env.SITE_URL),
   },
