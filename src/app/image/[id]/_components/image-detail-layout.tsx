@@ -60,7 +60,6 @@ export function ImageDetailLayout(props: {
     setTagsCardHeightPx((prev) => (prev === next ? prev : next));
   }
 
-  // "Results" uses the explicit prop passed by page.tsx.
   function onBackToResults(): void {
     if (props.preferBrowserBack && window.history.length > 1) {
       router.back();

@@ -35,6 +35,12 @@ type SearchCursorUrlShape = {
   id: number | string;
 };
 
+// A page-state snapshot for cursor pagination history.
+type SearchPageState = {
+  cursorToken: string | null;
+  shownBefore: number;
+};
+
 function encodeCursor(cursor: {
   matchCount: number;
   createdAtMs: number;
@@ -112,6 +118,80 @@ function parseIntParam(
   return Number.isFinite(n) && n >= 0 ? n : fallback;
 }
 
+// Encode the pagination history stack into a compact URL-safe token.
+function encodeHistory(history: SearchPageState[]): string {
+  return Buffer.from(JSON.stringify(history), "utf8").toString("base64url");
+}
+
+// Decode the history token defensively.
+function decodeHistory(raw: string | undefined): SearchPageState[] {
+  if (!raw) return [];
+
+  try {
+    const json = Buffer.from(raw, "base64url").toString("utf8");
+    const parsed = JSON.parse(json) as unknown;
+
+    if (!Array.isArray(parsed)) return [];
+
+    const out: SearchPageState[] = [];
+
+    for (const item of parsed) {
+      if (typeof item !== "object" || item === null) continue;
+
+      const cursorTokenRaw = (item as { cursorToken?: unknown }).cursorToken;
+      const shownBeforeRaw = (item as { shownBefore?: unknown }).shownBefore;
+
+      const cursorToken =
+        typeof cursorTokenRaw === "string" ? cursorTokenRaw : null;
+
+      const shownBefore =
+        typeof shownBeforeRaw === "number"
+          ? shownBeforeRaw
+          : typeof shownBeforeRaw === "string"
+            ? Number(shownBeforeRaw)
+            : Number.NaN;
+
+      if (!Number.isFinite(shownBefore) || shownBefore < 0) continue;
+
+      out.push({
+        cursorToken,
+        shownBefore,
+      });
+    }
+
+    return out;
+  } catch {
+    return [];
+  }
+}
+
+// Build a canonical in-app search href from explicit state.
+function buildSearchHref(args: {
+  qUrl: string;
+  cursorToken: string | null;
+  shownBefore: number;
+  history: SearchPageState[];
+}): string {
+  const params = new URLSearchParams();
+
+  // Always include q for consistency, even if empty, because this is a search page.
+  params.set("q", args.qUrl);
+
+  if (args.cursorToken) {
+    params.set("cursor", args.cursorToken);
+  }
+
+  if (args.shownBefore > 0) {
+    params.set("shown", String(args.shownBefore));
+  }
+
+  if (args.history.length > 0) {
+    params.set("history", encodeHistory(args.history));
+  }
+
+  return `/search?${params.toString()}`;
+}
+
 /**
  * SEO:
  * Dynamic metadata because the content depends on ?q=
@@ -184,6 +264,11 @@ export default async function SearchPage(props: {
 
   const shownBefore = parseIntParam(searchParams.shown, 0);
 
+  // Parse the back-stack/history of prior pages.
+  const rawHistory = searchParams.history;
+  const historyToken = Array.isArray(rawHistory) ? rawHistory[0] : rawHistory;
+  const history = decodeHistory(historyToken);
+
   // Step 2: Create a server-side tRPC caller.
   const ctx = await createTRPCContext({ headers: await headers() });
   const api = createCaller(ctx);
@@ -215,11 +300,42 @@ export default async function SearchPage(props: {
   const shownSoFarRaw = shownBefore + results.items.length;
   const shownSoFar = Math.min(shownSoFarRaw, results.totalCount);
 
-  // Build the exact current search URL once and pass it into each image link as `from`.
-  const currentSearchHref =
-    cursorToken || shownBefore > 0 || qUrl !== ""
-      ? `/search?q=${encodeURIComponent(qUrl)}${cursorToken ? `&cursor=${encodeURIComponent(cursorToken)}` : ""}${shownBefore > 0 ? `&shown=${encodeURIComponent(shownBefore)}` : ""}`
-      : "/search";
+  // Represent the current page state.
+  const currentPageState: SearchPageState = {
+    cursorToken: cursorToken ?? null,
+    shownBefore,
+  };
+
+  // Build the exact current page href, including history.
+  const currentSearchHref = buildSearchHref({
+    qUrl,
+    cursorToken: currentPageState.cursorToken,
+    shownBefore: currentPageState.shownBefore,
+    history,
+  });
+
+  // Build the next-page href by pushing the current page onto the history stack.
+  const nextHref = nextCursorToken
+    ? buildSearchHref({
+        qUrl,
+        cursorToken: nextCursorToken,
+        shownBefore: shownSoFar,
+        history: [...history, currentPageState],
+      })
+    : null;
+
+  // Build the previous-page href if history exists.
+  const previousPageState =
+    history.length > 0 ? history[history.length - 1] : null;
+
+  const previousHref = previousPageState
+    ? buildSearchHref({
+        qUrl,
+        cursorToken: previousPageState.cursorToken,
+        shownBefore: previousPageState.shownBefore,
+        history: history.slice(0, -1),
+      })
+    : null;
 
   return (
     <main className="min-h-screen bg-white">
@@ -292,11 +408,22 @@ export default async function SearchPage(props: {
           ))}
         </div>
 
-        <div className="mt-8 flex items-center justify-end">
-          {nextCursorToken ? (
+        <div className="mt-8 flex items-center justify-between">
+          <div>
+            {previousHref ? (
+              <Link
+                className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-900 shadow-sm hover:bg-gray-50"
+                href={previousHref}
+              >
+                ← Previous
+              </Link>
+            ) : null}
+          </div>
+
+          {nextHref ? (
             <Link
               className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-900 shadow-sm hover:bg-gray-50"
-              href={`/search?q=${encodeURIComponent(qUrl)}&cursor=${encodeURIComponent(nextCursorToken)}&shown=${encodeURIComponent(shownSoFar)}`}
+              href={nextHref}
             >
               Next →
             </Link>
