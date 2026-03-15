@@ -33,7 +33,28 @@ import { env } from "~/env";
  * This keeps the page stable across Next versions and build modes.
  */
 type ParamsShape = { id: string };
-type PropsShape = { params: ParamsShape | Promise<ParamsShape> };
+type SearchParamsShape = Record<string, string | string[] | undefined>;
+type PropsShape = {
+  params: ParamsShape | Promise<ParamsShape>;
+  searchParams?: SearchParamsShape | Promise<SearchParamsShape>;
+};
+
+/**
+ * Parse a same-origin-safe internal `from` href from the query string.
+ */
+function getSafeBackHref(rawFrom: string | string[] | undefined): string {
+  const from = Array.isArray(rawFrom) ? rawFrom[0] : rawFrom;
+
+  if (!from) return "/";
+
+  // Must be an internal path.
+  if (!from.startsWith("/")) return "/";
+
+  // Reject protocol-relative URLs.
+  if (from.startsWith("//")) return "/";
+
+  return from;
+}
 
 /**
  * SEO:
@@ -143,15 +164,19 @@ export async function generateMetadata(props: unknown): Promise<Metadata> {
 }
 
 export default async function ImageDetailPage(props: unknown) {
-  const { params } = props as PropsShape;
+  const { params, searchParams } = props as PropsShape;
 
   /**
    * Next 15-safe: defensive await.
    */
   const resolvedParams = await params;
 
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
+
   // Step 1: Parse the route param.
   const id = Number(resolvedParams.id);
+
+  const backHref = getSafeBackHref(resolvedSearchParams?.from);
 
   /**
    * If the URL param is not a valid positive integer,
@@ -162,7 +187,7 @@ export default async function ImageDetailPage(props: unknown) {
       <main className="min-h-screen bg-white">
         <div className="mx-auto max-w-4xl px-6 py-10">
           <Link
-            href="/"
+            href={backHref}
             className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-center text-sm font-medium text-gray-900 shadow-sm hover:bg-gray-50"
           >
             ← Search
@@ -197,7 +222,7 @@ export default async function ImageDetailPage(props: unknown) {
       <main className="min-h-screen bg-white">
         <div className="mx-auto max-w-4xl px-6 py-10">
           <Link
-            href="/"
+            href={backHref}
             className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-center text-sm font-medium text-gray-900 shadow-sm hover:bg-gray-50"
           >
             ← Search
@@ -261,6 +286,7 @@ export default async function ImageDetailPage(props: unknown) {
         title={title}
         createdAtIso={image.createdAt.toISOString()}
         imageUrl={imageUrl}
+        backHref={backHref}
         ImageActionsSlot={<ImageActions imageId={image.id} />}
         tags={tags.map((t) => ({
           id: t.id,

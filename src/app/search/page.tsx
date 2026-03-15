@@ -215,6 +215,12 @@ export default async function SearchPage(props: {
   const shownSoFarRaw = shownBefore + results.items.length;
   const shownSoFar = Math.min(shownSoFarRaw, results.totalCount);
 
+  // Build the exact current search URL once and pass it into each image link as `from`.
+  const currentSearchHref =
+    cursorToken || shownBefore > 0 || qUrl !== ""
+      ? `/search?q=${encodeURIComponent(qUrl)}${cursorToken ? `&cursor=${encodeURIComponent(cursorToken)}` : ""}${shownBefore > 0 ? `&shown=${encodeURIComponent(shownBefore)}` : ""}`
+      : "/search";
+
   return (
     <main className="min-h-screen bg-white">
       <div className="mx-auto max-w-6xl px-6 py-10">
@@ -260,7 +266,7 @@ export default async function SearchPage(props: {
           {results.items.map((r) => (
             <Link
               key={r.id}
-              href={`/image/${r.id}`}
+              href={`/image/${r.id}?from=${encodeURIComponent(currentSearchHref)}`}
               className="group rounded-2xl border border-gray-200 bg-white shadow-sm hover:shadow-md"
             >
               {/* Thumbnail area */}

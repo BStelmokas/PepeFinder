@@ -10,6 +10,7 @@
  */
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import React, {
   useEffect,
   useLayoutEffect,
@@ -32,8 +33,12 @@ export function ImageDetailLayout(props: {
   imageUrl: string;
   tags: TagRow[];
   ImageActionsSlot: React.ReactNode;
+  backHref: string;
 }) {
   const imageCardRef = useRef<HTMLDivElement | null>(null);
+
+  // App Router client navigation helper for the "Back" button.
+  const router = useRouter();
 
   /**
    * tagsCardHeightPx is applied as an inline style:
@@ -52,6 +57,11 @@ export function ImageDetailLayout(props: {
 
     // Avoid unnecessary state updates; reduces re-render churn.
     setTagsCardHeightPx((prev) => (prev === next ? prev : next));
+  }
+
+  // "Results" uses the explicit prop passed by page.tsx.
+  function onBackToResults(): void {
+    router.push(props.backHref);
   }
 
   /**
@@ -91,25 +101,20 @@ export function ImageDetailLayout(props: {
       <div className="mx-auto max-w-6xl px-6 py-10">
         {/* Top navigation */}
         <div className="flex items-center justify-between">
+          <button
+            type="button"
+            onClick={onBackToResults}
+            className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-center text-sm font-medium text-gray-900 shadow-sm hover:bg-gray-50"
+          >
+            ← Back
+          </button>
+
           <Link
             href="/"
             className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-center text-sm font-medium text-gray-900 shadow-sm hover:bg-gray-50"
           >
-            ← Home
+            Home
           </Link>
-
-          {props.imageStatus === "indexed" ? (
-            <Link
-              href="/upload"
-              className="rounded-xl bg-gray-900 px-4 py-2 text-center text-sm font-medium text-white shadow-sm hover:bg-gray-800"
-            >
-              Upload
-            </Link>
-          ) : (
-            <span className="rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-700">
-              status: {props.imageStatus}
-            </span>
-          )}
         </div>
 
         {/* Main content: image + tag sidebar */}
