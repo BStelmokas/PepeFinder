@@ -39,7 +39,7 @@ export default function PrivacyPage() {
         <ul className="mt-2 list-disc space-y-2 pl-5 text-sm text-gray-700">
           <li>
             <span className="font-medium">Uploaded images</span> (including
-            images you provide to the system through manual ingestion)
+            images you provide to the system through manual ingestion).
           </li>
           <li>
             <span className="font-medium">Derived metadata</span> such as tags,
