@@ -346,25 +346,6 @@ Search remains unaffected.
 
 # Why This Project Exists
 
-This app demonstrates:
+I built this app to solve a real-world problem I had myself. That proved to be an efficient and an engaging motivator: not only are you solving an issue that you know for a fact exists in this world, which has merits on its own - you intuit the design and solutions better than for projects that might be technically impressive but you have no true connection to.
 
-```
-AI integration without request-path coupling
-
-Deterministic ranking
-
-Cursor-based pagination
-
-Idempotent ingestion pipelines
-
-Async job orchestration using Postgres
-
-Operator-controlled moderation
-
-Cost-aware design
-
-Production hygiene and schema discipline
-
-It is intentionally small —
-but built like something that expects to grow.
-```
+---
