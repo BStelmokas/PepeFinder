@@ -13,6 +13,7 @@ import { sql } from "drizzle-orm";
 import { db } from "~/server/db";
 import { images } from "~/server/db/schema";
 import getOrigin from "src/lib/url/get-origin";
+import { resolveImageUrlForBrowser } from "~/server/storage/resolve-image-url";
 
 // IMPORTANT: Next.js requires this to be statically analyzable (a literal), not an expression.
 export const revalidate = 3600; // Re-generate at most once per hour
@@ -25,6 +26,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     .select({
       id: images.id,
       updatedAt: images.updatedAt,
+      storageKey: images.storageKey,
     })
     .from(images)
     .where(sql`${images.status} = 'indexed'`)
@@ -37,9 +39,16 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   ];
 
   for (const r of rows) {
+    const imageUrl = await resolveImageUrlForBrowser(r.storageKey);
+
+    const absoluteImageUrl = imageUrl.startsWith("/")
+      ? `${origin}${imageUrl}`
+      : imageUrl;
+
     out.push({
       url: `${origin}/image/${r.id}`,
       lastModified: r.updatedAt ?? undefined,
+      images: [absoluteImageUrl],
     });
   }
 
